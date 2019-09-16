@@ -1,7 +1,0 @@
-/Users/tunde/Documents/netgen/mylittlengsolve-master/build/CMakeFiles/install/strip.dir
-/Users/tunde/Documents/netgen/mylittlengsolve-master/build/CMakeFiles/install.dir
-/Users/tunde/Documents/netgen/mylittlengsolve-master/build/CMakeFiles/list_install_components.dir
-/Users/tunde/Documents/netgen/mylittlengsolve-master/build/CMakeFiles/rebuild_cache.dir
-/Users/tunde/Documents/netgen/mylittlengsolve-master/build/CMakeFiles/edit_cache.dir
-/Users/tunde/Documents/netgen/mylittlengsolve-master/build/CMakeFiles/install/local.dir
-/Users/tunde/Documents/netgen/mylittlengsolve-master/build/CMakeFiles/myngspy.dir
