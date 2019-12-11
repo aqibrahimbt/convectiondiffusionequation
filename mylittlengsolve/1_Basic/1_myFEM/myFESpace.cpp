@@ -1,54 +1,39 @@
-/*********************************************************************/
-/* File:   myFESpace.cpp                                             */
-/* Author: Joachim Schoeberl                                         */
-/* Date:   26. Apr. 2009                                             */
-/*********************************************************************/
-
-
-/*
-
-My own FESpace for linear and quadratic triangular elements.
-
-A fe-space provides the connection between the local reference
-element, and the global mesh.
-
-*/
-
-
-#include <comp.hpp>    // provides FESpace, ...
+#include <comp.hpp>
 #include <h1lofe.hpp>
 #include <regex>
 #include <python_comp.hpp>
+#include <utility>
 #include "myElement.hpp"
 #include "myFESpace.hpp"
 #include "myDiffOp.hpp"
 
-
+// allows us to use the ngcomp namespace
 namespace ngcomp
 {
 
-  MyFESpace :: MyFESpace (shared_ptr<MeshAccess> ama, const Flags & flags, shared_ptr<BitArray> ba)
-    : FESpace (ama, flags), my_ba (ba)
+  MyFESpace :: MyFESpace (shared_ptr<MeshAccess> ama, const Flags & flags,
+          shared_ptr<BitArray> ba)
+    : FESpace (std::move(ama), flags), my_ba (std::move(ba))
   {
     cout << "Constructor of MyFESpace" << endl;
     cout << "Flags = " << flags << endl;
     cout << my_ba << endl;
-    // this is needed for pickling and needs to be the same as used in
-    // RegisterFESpace later
+
     type = "myfespace";
 
     secondorder = flags.GetDefineFlag ("secondorder");
+    cout << secondorder << endl;
 
     if (!secondorder)
-      cout << "You have chosen first order elements" << endl;
+      cout << "Working with first order elements" << endl;
     else
-        throw Exception("no second order for now");
-    //cout << "You have chosen second order elements" << endl;
+      throw Exception("no second order for now");
 
     // needed for symbolic integrators and to draw solution
     evaluator[VOL] = make_shared<T_DifferentialOperator<MyDiffOpId>>();
     flux_evaluator[VOL] = make_shared<T_DifferentialOperator<MyDiffOpGradient>>();
   }
+
 
   DocInfo MyFESpace :: GetDocu()
   {
@@ -58,17 +43,27 @@ namespace ngcomp
     return docu;
   }
 
+  // Updating Finite Element Space
   void MyFESpace :: Update()
   {
     // some global update:
-    cout << "Update MyFESpace, #vert = " << ma->GetNV()
-         << ", #edge = " << ma->GetNEdges() << endl;
+    // GetNEdges: number of edges in the whole mesh
+    // GetNV: number of vertices
+    cout << "Update MyFESpace, #number of vertices = " << ma->GetNV()
+         << ", #number of edges = " << ma->GetNEdges() << endl;
 
+    // Get active vertices
     BitArray active_vertices(ma->GetNV());
+    cout << "active vertices" << active_vertices << endl;
     active_vertices.Clear();
 
+    cout << "range" << Range(ma->GetNE(VOL)) <<endl;
+
+    // number of volume or boundary elements (GETNE)
+    // loop over all the elements in the mesh
     for (auto i : Range(ma->GetNE(VOL)))
     {
+        // check bit i
         if (my_ba->Test(i))
         {
             auto vs = ma->GetElVertices(ElementId(VOL,i));
@@ -76,7 +71,9 @@ namespace ngcomp
                 active_vertices.Set(v);
         }
     }
-    cout << active_vertices << endl;
+
+    cout << "active vertices new" << active_vertices << endl;
+    cout << "active vertices size" << active_vertices.Size() << endl;
     ndof = 0;
     gvert_to_cvert.SetSize(ma->GetNV());
 
@@ -89,13 +86,6 @@ namespace ngcomp
         else
             gvert_to_cvert[i] = -1;
     cout << "ndof: " << ndof << endl;
-    // numbe   r of vertices
-    //nvert = ma->GetNV();
-
-    // number of dofs:
-    //ndof = nvert;
-    //if (secondorder)
-    //  ndof += ma->GetNEdges();  // num vertics + num edges
   }
 
   void MyFESpace :: GetDofNrs (ElementId ei, Array<DofId> & dnums) const
@@ -107,26 +97,19 @@ namespace ngcomp
 
     if (!ei.IsVolume())
         return;
-    if (! my_ba->Test(ei.Nr()))
+    if (!my_ba->Test(ei.Nr()))
         return;
 
     // first dofs are vertex numbers:
     for (auto v : ma->GetElVertices(ei))
       dnums.Append (gvert_to_cvert[v]);
 
-    if (secondorder)
-      {
-        // more dofs on edges:
-        for (auto e : ma->GetElEdges(ei))
-          dnums.Append (nvert+e);
-      }
-    cout << ei << dnums << endl;
   }
 
   FiniteElement & MyFESpace :: GetFE (ElementId ei, Allocator & alloc) const
   {
 
-    if (! my_ba->Test(ei.Nr()))
+    if (!my_ba->Test(ei.Nr()))
         return * new (alloc) DummyFE<ET_TRIG>;
 
     if (ei.IsVolume())
@@ -138,43 +121,21 @@ namespace ngcomp
       }
     else
       throw Exception("Boundary elements not implemented yet!");
-    // else
-    //   {
-    //     if (!secondorder)
-    //       return * new (alloc) MyLinearSegm;
-    //     else
-    //       return * new (alloc) MyQuadraticSegm;
-    //   }
   }
-
-  /*
-    register fe-spaces
-    Object of type MyFESpace can be defined in the pde-file via
-    "define fespace v -type=myfespace"
-  */
-
-  //static RegisterFESpace<MyFESpace> initifes ("myfespace");
 }
 
 void ExportMyFESpace(py::module m)
 {
   using namespace ngcomp;
-    m.def("MyFESpace2", [](shared_ptr<MeshAccess> ma, shared_ptr<BitArray> ba, py::dict bpflags)
-                  -> shared_ptr<FESpace>
+    m.def("CustomFESpace", [](shared_ptr<MeshAccess> ma,
+            shared_ptr<BitArray> ba, py::dict bpflags)-> shared_ptr<FESpace>
           {
-              Flags flags = py::extract<Flags> (bpflags)();
+              Flags flags = py::extract<Flags> (std::move(bpflags))();
               shared_ptr<FESpace> ret = make_shared<MyFESpace> (ma, flags, ba);
-              //LocalHeap lh (1000000, "SFESpace::Update-heap", true);
               ret->Update();
               ret->FinalizeUpdate();
               return ret;
           },
-          docu_string(R"raw_string(
-...
-)raw_string"));
+          docu_string(R"raw_string(...)raw_string"));
 
-
-  //ExportFESpace<MyFESpace>(m, "MyFESpace")
-  //  .def("GetNVert", &MyFESpace::GetNVert)
-  //  ;
 }

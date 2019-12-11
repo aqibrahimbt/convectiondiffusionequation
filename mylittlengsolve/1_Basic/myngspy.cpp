@@ -41,7 +41,7 @@ class NumProcPyDemo : public NumProc
 {
 
 public:
-    
+
   NumProcPyDemo (shared_ptr<PDE> apde, const Flags & flags)
     : NumProc (apde) { ; }
 
@@ -49,7 +49,7 @@ public:
   {
     cout << "solving NumProcPyDemo" << endl;
   }
-  
+
   virtual void PrintReport (ostream & ost)
   {
     ost << "I am NumProcPyDemo" << endl;

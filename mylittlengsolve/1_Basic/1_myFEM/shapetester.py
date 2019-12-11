@@ -1,18 +1,23 @@
-from netgen import gui
-from netgen.geom2d import unit_square
-from ngsolve import *
 from myngspy import *
+from ngsolve import *
+from netgen.geom2d import unit_square
+from netgen import gui
+import faulthandler
+faulthandler.enable()
 
 mesh = Mesh(unit_square.GenerateMesh(maxh=0.2))
-
+#
 ba = BitArray(mesh.ne)
 ba.Clear()
-ba[1]=True
-fes = MyFESpace2(mesh, ba, {"secondorder" : False})
-print(fes.ndof)
-u = GridFunction(fes,"shapes")
 
-Draw(u,mesh,"u",draw_surf=True)
+## Specify the element
+ba[20] = True
+print(ba)
+fes = Cust(mesh, ba, {"secondorder": False})
+print("degrees of freedom " + str(fes.ndof))
+u = GridFunction(fes, "shapes")
+
+Draw(u, mesh, "u", draw_surf=True)
 input("")
 # we can use the additionally exported function here
 for i in range(fes.ndof):

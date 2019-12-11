@@ -7,8 +7,8 @@ mesh = Mesh(unit_square.GenerateMesh(maxh=0.2))
 # for i in range(5):
 #     mesh.Refine()
 
-fes = MyFESpace(mesh, dirichlet="top|bottom|right|left") #, secondorder=True)
-u,v = fes.TnT()
+fes = MyFESpace(mesh, dirichlet="top|bottom|right|left")
+u, v = fes.TnT()
 # print ("freedofs: ", fes.FreeDofs())
 
 
