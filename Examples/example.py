@@ -31,26 +31,26 @@ for size in mesh_size:
     V = L2(mesh, order=2)
     u, v = V.TnT()
 
-    # a = BilinearForm(V)
-    # a += SymbolicBFI((eps *  grad(u) * grad(v)) + (b * grad(u) * v))
-    # #a += u * v * dx
-    #
-    # f = LinearForm(V)
+    a = BilinearForm(V)
+    # a += SymbolicBFI((eps * grad(u) * grad(v)) + (b * grad(u) * v))
+    a += u * v * dx
+
+    f = LinearForm(V)
     # f += SymbolicLFI(coeff * v)
-    # #f += coeff * v * dx
-    #
-    # f.Assemble()
-    # a.Assemble()
-    #
-    # gu = GridFunction(V)
-    # gu.vec.data = a.mat.Inverse(V.FreeDofs(), inverse='sparsecholesky') * f.vec
-    # Draw(gu, mesh, 'test')
+    f += coeff * v * dx
+
+    f.Assemble()
+    a.Assemble()
+
+    gu = GridFunction(V)
+    gu.vec.data = a.mat.Inverse(V.FreeDofs(), inverse='sparsecholesky') * f.vec
+    Draw(gu, mesh, 'test')
 
     Q = L2(mesh, order=0)
-    #ba = BitArray(mesh.ne)
-    #ba.Set()
-    #ba[0] = False
-    #Q = Compress(Q, active_dofs=ba)
+    ba = BitArray(mesh.ne)
+    ba.Set()
+    ba[0] = False
+    Q = Compress(Q, active_dofs=ba)
     W = FESpace([V, Q])
 
     (u, p), (v, q) = W.TnT()
@@ -58,20 +58,19 @@ for size in mesh_size:
     p = coeff * p
     q = coeff * q
 
-    grad_u = grad(u) + CoefficientFunction((coeff.Diff(x), coeff.Diff(y))) * p
-    grad_v = grad(v) + CoefficientFunction((coeff.Diff(x), coeff.Diff(y))) * q
-
     u = u + p
     v = v + q
 
-    a = BilinearForm(W)
+    # grad_u = grad(u) + CoefficientFunction((coeff.Diff(x), coeff.Diff(y))) * p
+    # grad_v = grad(v) + CoefficientFunction((coeff.Diff(x), coeff.Diff(y))) * q
 
-    a += SymbolicBFI((eps * grad_u * grad_v) + (b * grad_u * v))
+    a = BilinearForm(W)
+    # a += SymbolicBFI((eps * grad_u * grad_v) + (b * grad_u * v))
     a += u * v * dx
 
     f = LinearForm(W)
-    f += SymbolicLFI(coeff * v)
-    # f += coeff * v * dx
+    # f += SymbolicLFI(coeff * v)
+    f += coeff * v * dx
 
     f.Assemble()
     a.Assemble()
@@ -80,7 +79,5 @@ for size in mesh_size:
     gu2.vec.data = a.mat.Inverse(
         W.FreeDofs(), inverse='sparsecholesky') * f.vec
     u2 = gu2.components[0] + gu2.components[1] * coeff
-    # Draw(u2 - coeff, mesh, 'test2')
-    Draw(gu2.components[0], mesh, 'test2')
-    # print('Mesh Size:', size , "L2 Error:", sqrt (Integrate ((u2 - exact)*(u2- exact), mesh)))
+    Draw(u2, mesh, 'test2')
     input('running everything')
