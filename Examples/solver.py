@@ -3,7 +3,6 @@ from netgen.geom2d import unit_square
 from ngsolve import *
 import pandas as pd
 
-
 class ConvectionDiffusion:
     def __init__(self, mesh, order, method):
         self.mesh = mesh
