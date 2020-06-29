@@ -9,6 +9,7 @@ import math
 from netgen.geom2d import SplineGeometry
 from netgen.geom2d import unit_square
 
+
 hcoarse = 0.08
 # %% markdown
 # ### Generating Geometry and Mesh
