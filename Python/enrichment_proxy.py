@@ -11,6 +11,7 @@ class EnrichmentProxy(CoefficientFunction):
     Provide wrappers for grad/Other and multiplication of enrichment lists for the DG Method.
     """
     def __init__(self, func, enr_list):
+        CoefficientFunction.__init__(self,0)
         self.func = func
         self.enr_list = enr_list
         self.grad_list = [CoefficientFunction((coeff.Diff(x), coeff.Diff(y))) for coeff in self.enr_list ]
@@ -73,6 +74,7 @@ class EnrichmentProxy_VOL(CoefficientFunction):
     Provide wrappers for grad/Other and multiplication of enrichment lists for the HDG method.
     """
     def __init__(self, func, enr_list):
+        CoefficientFunction.__init__(self,0)
         self.func = func
         self.enr_list = enr_list
         self.grad_list = [CoefficientFunction((coeff.Diff(x), coeff.Diff(y))) for coeff in self.enr_list ]
@@ -135,6 +137,7 @@ class EnrichmentProxy_FAC(CoefficientFunction):
     Provide wrappers for the facets.
     """
     def __init__(self, func, enr_list):
+        CoefficientFunction.__init__(self,0)
         self.func = func
         self.enr_list = enr_list
         self.grad_list = [CoefficientFunction((coeff.Diff(x), coeff.Diff(y))) for coeff in self.enr_list ]
@@ -177,19 +180,27 @@ class EnrichmentProxy_FAC(CoefficientFunction):
         return self.__sub__(other)
 
 
-
 '''Mark elements in the mesh to be enriched'''
-def mark_element(Q, mesh, enr_indicator, mesh_size):
+def mark_elements(mesh, enr_indicator, mesh_size):
+    ba = BitArray(mesh.ne)        
+    ba.Clear()
+    for el in mesh.Elements():
+        for v in el.vertices:
+            if (enr_indicator(mesh[v].point[0],mesh[v].point[1],mesh_size)):
+                ba[el.nr] = True
+    return ba
+
+    
+'''Mark elements in the mesh to be enriched'''
+def mark_dofs(Q, mesh, enr_indicator, mesh_size):
+    ba_el = mark_elements(mesh, enr_indicator, mesh_size)
     ba = BitArray(Q.ndof)        
     ba.Clear()
     for el in Q.Elements():
-        mark = False
-        for v in el.vertices:
-            if (enr_indicator(mesh[v].point[0],mesh[v].point[1],mesh_size)):
-                mark = True
-        for dof in el.dofs:
-            ba[dof] = mark
-        Qx = Compress(Q, active_dofs=ba)     
+        if ba_el[el.nr]:
+            for dof in el.dofs:
+                ba[dof] = True
+    Qx = Compress(Q, active_dofs=ba)     
     return Qx
 
 
