@@ -80,14 +80,13 @@ class Discontinous_Galerkin():
                                 for i in range(Nstd,N):
                                   # print(i,el.dofs[i])
                                   if important[i]:
-                                    ba_active_dofs[el.dofs[i]] = False
                                     active = [j for j in range(i) if important[j]]
                                     factor = 1 - 2 * sum([elmat[i,j]**2/elmat[i,i]/elmat[j,j] for j in active])
                                     factor += sum([elmat[i,j]*elmat[i,k]*elmat[j,k]/elmat[i,i]/elmat[j,j]/elmat[k,k] for j in active for k in active])
                                     factor = sqrt(abs(factor))
                                     factors.append(factor)
                                     # print("factor:",factor)
-                                    if (factor >= 0):
+                                    if (factor <= 1e-3):
                                         important[i] = False
                                         if el.dofs[i] >= 0:
                                             ba_active_dofs[el.dofs[i]] = False
