@@ -49,7 +49,9 @@ class Discontinous_Galerkin():
                         # # Checking linear dependence
                         # # Get active elements from the enrichment
                         ipintegrator = SymbolicBFI(u() * v(),bonus_intorder=bonus_int)
-                        ba_active_elements = mark_elements(mesh,enr_indicator, size) #BitArray(mesh.ne)                        
+                        ba_active_elements = BitArray(mesh.ne)
+                        for enr_indicator in self.config['enrich_domain_ind']:
+                            ba_active_elements |= mark_elements(mesh,enr_indicator, size)             
                         # # Get dofs
                         ba_active_dofs = BitArray(fes.FreeDofs())
                         ba_active_dofs[:] = fes.FreeDofs()
@@ -95,6 +97,11 @@ class Discontinous_Galerkin():
                         # print(ba_active_dofs)
                         # print("active dofs:",sum(ba_active_dofs))
                         # print("fes dofs:", fes.ndof)
+
+                        u = EnrichmentProxy(fes.TrialFunction(), self.config['enrich_functions'])
+                        v = EnrichmentProxy(fes.TestFunction(), self.config['enrich_functions'])
+
+                        
                         jump_u = u-u.Other()
                         jump_v = v-v.Other()
 
@@ -164,7 +171,7 @@ class Discontinous_Galerkin():
                         fes = L2(mesh, order=order, dgjumps=True)
                         u, v = fes.TnT()
     
-                        # print("fes dofs:", fes.ndof)
+                        # print("active dofs:",sum(fes.FreeDofs()))
                         jump_u = u-u.Other()
                         jump_v = v-v.Other()
                         n = specialcf.normal(2)
@@ -192,12 +199,14 @@ class Discontinous_Galerkin():
                         
                         acd = BilinearForm(fes)
                         acd += self.config['epsilon']  * diffusion + convection
-                        acd.Assemble()
+                        with TaskManager():
+                            acd.Assemble()
                         
                         # rhs
                         f = LinearForm(fes)
                         f += self.config['coeff'] * v * dy
-                        f.Assemble()
+                        with TaskManager():
+                            f.Assemble()
     
                         gfu = GridFunction(fes, name="uDG")  
                         gfu.vec.data = acd.mat.Inverse(freedofs=fes.FreeDofs(),inverse="umfpack") * f.vec
