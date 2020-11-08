@@ -196,7 +196,7 @@ class Discontinous_Galerkin():
                         
                         # rhs
                         f = LinearForm(fes)
-                        f += SymbolicLFI(self.config['coeff'] * v)
+                        f += self.config['coeff'] * v * dy
                         f.Assemble()
     
                         gfu = GridFunction(fes, name="uDG")  
