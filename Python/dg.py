@@ -38,7 +38,7 @@ class Discontinous_Galerkin():
                         Vlist = [V]
                             
                         for enr_indicator in self.config['enrich_domain_ind']:
-                            Vlist.append(mark_element(Q,mesh,enr_indicator, size))
+                            Vlist.append(mark_dofs(Q,mesh,enr_indicator, size))
                         
                         fes = FESpace(Vlist, dgjumps = True)
 
@@ -49,7 +49,7 @@ class Discontinous_Galerkin():
                         # # Checking linear dependence
                         # # Get active elements from the enrichment
                         ipintegrator = SymbolicBFI(u() * v(),bonus_intorder=bonus_int)
-                        ba_active_elements = BitArray(mesh.ne)                        
+                        ba_active_elements = mark_elements(mesh,enr_indicator, size) #BitArray(mesh.ne)                        
                         # # Get dofs
                         ba_active_dofs = BitArray(fes.FreeDofs())
                         ba_active_dofs[:] = fes.FreeDofs()
@@ -59,8 +59,14 @@ class Discontinous_Galerkin():
                             if ba_active_elements[el.nr]:
                                 i = ElementId(el)
                                 element = fes.GetFE(el)
+
+                                
                                 elementstd = V.GetFE(i)
                                 Nstd = elementstd.ndof
+
+                                # print("Nstd:",Nstd)
+                                # print("el.dofs:",el.dofs)
+
                                 trafo = mesh.GetTrafo(i)
                                 # Get element matrix 
                                 elmat = ipintegrator.CalcElementMatrix(element, trafo)           
@@ -70,17 +76,25 @@ class Discontinous_Galerkin():
                                 
                                 factors=[]
                                 for i in range(Nstd,N):
+                                  # print(i,el.dofs[i])
                                   if important[i]:
+                                    ba_active_dofs[el.dofs[i]] = False
                                     active = [j for j in range(i) if important[j]]
                                     factor = 1 - 2 * sum([elmat[i,j]**2/elmat[i,i]/elmat[j,j] for j in active])
                                     factor += sum([elmat[i,j]*elmat[i,k]*elmat[j,k]/elmat[i,i]/elmat[j,j]/elmat[k,k] for j in active for k in active])
                                     factor = sqrt(abs(factor))
                                     factors.append(factor)
-                                    #print(factor)
-                                    if (factor < 1e-5):
+                                    # print("factor:",factor)
+                                    if (factor >= 0):
                                         important[i] = False
                                         if el.dofs[i] >= 0:
                                             ba_active_dofs[el.dofs[i]] = False
+
+                                            
+
+                        # print(ba_active_dofs)
+                        # print("active dofs:",sum(ba_active_dofs))
+                        # print("fes dofs:", fes.ndof)
                         jump_u = u-u.Other()
                         jump_v = v-v.Other()
 
@@ -121,10 +135,10 @@ class Discontinous_Galerkin():
                         gfu = GridFunction(fes, name="uDG")
                         
                         
-                        try:
-                            gfu.vec.data = acd.mat.Inverse(ba_active_dofs,inverse="umfpack") * f.vec
-                        except:
-                            gfu.vec.data = acd.mat.Inverse(ba_active_dofs,inverse="sparsecholesky") * f.vec
+                        # try:
+                        gfu.vec.data = acd.mat.Inverse(ba_active_dofs,inverse="umfpack") * f.vec
+                        # except:
+                        #     gfu.vec.data = acd.mat.Inverse(ba_active_dofs,inverse="sparsecholesky") * f.vec
                         
                         gfu = gfu.components[0] + sum([gfu.components[i+1]*self.config['enrich_functions'][i] for i in range(len(self.config['enrich_functions']))])
 
@@ -145,45 +159,51 @@ class Discontinous_Galerkin():
         for order in self.config['order']:
             for size in self.config['mesh_size']:
                 for alpha in self.config['alpha']:
-                    mesh = Mesh(unit_square.GenerateMesh(maxh=size))
-                    fes = L2(mesh, order=order, dgjumps=True)
-                    u, v = fes.TnT()
+                    for bonus_int in self.config['bonus_int_order']:
+                        mesh = Mesh(unit_square.GenerateMesh(maxh=size))
+                        fes = L2(mesh, order=order, dgjumps=True)
+                        u, v = fes.TnT()
+    
+                        # print("fes dofs:", fes.ndof)
+                        jump_u = u-u.Other()
+                        jump_v = v-v.Other()
+                        n = specialcf.normal(2)
+                        mean_dudn = 0.5 * n * (grad(u) + grad(u.Other()))
+                        mean_dvdn = 0.5 * n * (grad(v) + grad(v.Other()))
+    
+                        h = specialcf.mesh_size
+    
+    
+                        dy = dx(bonus_intorder = bonus_int)
+                        dX = dx(skeleton=True, bonus_intorder= bonus_int)
+                        dS = ds(skeleton=True, bonus_intorder= bonus_int)
+                        
+                        # diffusion
+                        diffusion = grad(u) * grad(v) * dy \
+                            +alpha * order ** 2/ h * jump_u * jump_v * dX \
+                            +(-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
+                            +alpha * order ** 2/h * u * v * dS \
+                            + (-n * grad(u) * v -n * grad(v) * u) * dS
+    
+                        # convection
+                        b = CoefficientFunction((self.config['beta'][0], self.config['beta'][1]))                    
+                        uup = IfPos(b * n, u, u.Other())
+                        convection = -b * u * grad(v) * dy + b * n * uup * jump_v * dX
+                        
+                        acd = BilinearForm(fes)
+                        acd += self.config['epsilon']  * diffusion + convection
+                        acd.Assemble()
+                        
+                        # rhs
+                        f = LinearForm(fes)
+                        f += SymbolicLFI(self.config['coeff'] * v)
+                        f.Assemble()
+    
+                        gfu = GridFunction(fes, name="uDG")  
+                        gfu.vec.data = acd.mat.Inverse(freedofs=fes.FreeDofs(),inverse="umfpack") * f.vec
+                        
+                        error = sqrt (Integrate ((gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order = 30 + bonus_int))
+                        self.dg_table.loc[len(self.dg_table)] = [order, size, error, alpha, bonus_int, 'dg']
 
-                    jump_u = u-u.Other()
-                    jump_v = v-v.Other()
-                    n = specialcf.normal(2)
-                    mean_dudn = 0.5 * n * (grad(u) + grad(u.Other()))
-                    mean_dvdn = 0.5 * n * (grad(v) + grad(v.Other()))
-
-                    h = specialcf.mesh_size
-
-                    # diffusion
-                    diffusion = grad(u) * grad(v) * dx \
-                        +alpha * order ** 2/ h * jump_u * jump_v * dx(skeleton=True) \
-                        +(-mean_dudn * jump_v - mean_dvdn * jump_u) * dx(skeleton=True) \
-                        +alpha * order ** 2/h * u * v * ds(skeleton=True) \
-                        + (-n * grad(u) * v -n * grad(v) * u) * ds(skeleton=True)
-
-                    # convection
-                    b = CoefficientFunction((self.config['beta'][0], self.config['beta'][1]))                    
-                    uup = IfPos(b * n, u, u.Other())
-                    convection = -b * u * grad(v) * dx + b * n * uup * jump_v * dx(skeleton=True)
-                    
-                    acd = BilinearForm(fes)
-                    acd += self.config['epsilon']  * diffusion + convection
-                    acd.Assemble()
-                    
-                    # rhs
-                    f = LinearForm(fes)
-                    f += SymbolicLFI(self.config['coeff'] * v)
-                    f.Assemble()
-
-                    gfu = GridFunction(fes, name="uDG")  
-                    gfu.vec.data = acd.mat.Inverse(freedofs=fes.FreeDofs(),inverse="umfpack") * f.vec
-                    
-                    error = sqrt (Integrate ((gfu-self.config['exact'])*(gfu-self.config['exact']), mesh))
-
-                    self.dg_table[len(self.dg_table)] = [order, size, error, alpha, 0, 'dg']
-                    
-                    print ('Order:', order, 'Mesh Size:', size , "L2-error:", error)
-        return self.dg_table
+                        print ('Order:', order, 'Mesh Size:', size , "L2-error:", error)
+            return self.dg_table

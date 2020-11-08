@@ -32,13 +32,14 @@ exact = p(x) * q(y)
 coeff =  beta[1] * p(x) +  beta[0] * q(y)
 
 config = {
-    'order': [1, 2, 3, 4],
+    'order': [3],
     'beta': (beta[0],beta[1]),
-    'mesh_size': [1.0, 0.5, 0.25, 0.125, 0.0625],
+    'mesh_size': np.logspace(0,-1,num=50),
+    #[1.0, 0.8, 0.6,  0.5, 0.4, 0.3, 0.25, 0.2, 0.15, 0.125, 0.08, 0.0625],
     'epsilon': 0.01,
     'exact': exact,
     'coeff': coeff,
-    'alpha': [100],
+    'alpha': [20],
     'bonus_int_order' : [10],
     'enrich_functions':[p(x), q(y)],
     'enrich_domain_ind':[lambda x,y,h: x > 1 - h/2, lambda x,y,h: y > 1 - h/2]
@@ -48,10 +49,23 @@ config = {
 if __name__ == "__main__":
     ngsglobals.msg_level = 0
     CT = Discontinous_Galerkin(config)
-    dg_table = CT._solveEDG()
-    plot_error(dg_table)
+    dg_table = CT._solveDG()
+
+    order_3 = dg_table[dg_table.Order.eq(3.0)]
+
+
+    fig, (ax3, ax3b) = plt.subplots(1, 2, figsize=(20,5))
+    order_3.plot(x='Mesh Size', y='Error', ax=ax3, legend=True, title='k = 3(DG)', style='.-', loglog=True)
+
+    edg_table = CT._solveEDG()
+
+    order_3b = edg_table[edg_table.Order.eq(3.0)]
+    
+    order_3b.plot(x='Mesh Size', y='Error', ax=ax3b, legend=True, title='k = 3(EDG)', style='.-', loglog=True)
+    # plot_error(dg_table)
 
     # CT = Hybrid_Discontinuous_Galerkin(config)
     # hdg_table = CT._solveEHDG()
-
+    
+    plt.show()
 
