@@ -89,9 +89,7 @@ class Discontinous_Galerkin():
                                     if (factor <= 1e-3):
                                         important[i] = False
                                         if el.dofs[i] >= 0:
-                                            ba_active_dofs[el.dofs[i]] = False
-
-                                            
+                                            ba_active_dofs[el.dofs[i]] = False                                            
 
                         # print(ba_active_dofs)
                         # print("active dofs:",sum(ba_active_dofs))

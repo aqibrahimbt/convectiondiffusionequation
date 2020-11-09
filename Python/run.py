@@ -6,7 +6,7 @@ from ngsolve.comp import ProxyFunction
 from ngsolve.webgui import Draw
 from ngsolve import ngsglobals
 from ngsolve.webgui import Draw as WebGuiDraw
-import netgen.gui
+#import netgen.gui
 
 ## packages
 import numpy as np
@@ -39,8 +39,8 @@ config = {
     'epsilon': 0.01,
     'exact': exact,
     'coeff': coeff,
-    'alpha': [20],
-    'bonus_int_order' : [10],
+    'alpha': [10],
+    'bonus_int_order' : [1],
     'enrich_functions':[p(x), q(y)],
     'enrich_domain_ind':[lambda x,y,h: x > 1 - h/2, lambda x,y,h: y > 1 - h/2]
 }
