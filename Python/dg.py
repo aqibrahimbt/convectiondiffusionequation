@@ -8,6 +8,7 @@ from enrichment_proxy import *
 
 """
 Discontinuous Galerkin Method with Upwinding
+TODO: Merge both DG and HDG
 """
 
 class Discontinous_Galerkin():
@@ -34,9 +35,8 @@ class Discontinous_Galerkin():
                         mesh = Mesh(unit_square.GenerateMesh(maxh=size))
                         V = L2(mesh, order=order, dgjumps=True)    
                         Q = L2(mesh, order=0)
-    
                         Vlist = [V]
-                            
+                        
                         for enr_indicator in self.config['enrich_domain_ind']:
                             Vlist.append(mark_dofs(Q,mesh,enr_indicator, size))
                         
@@ -46,59 +46,41 @@ class Discontinous_Galerkin():
                         v = EnrichmentProxy(fes.TestFunction(), self.config['enrich_functions'])
 
 
-                        # # Checking linear dependence
-                        # # Get active elements from the enrichment
+                        # Checking linear dependence
                         ipintegrator = SymbolicBFI(u() * v(),bonus_intorder=bonus_int)
                         ba_active_elements = BitArray(mesh.ne)
                         for enr_indicator in self.config['enrich_domain_ind']:
                             ba_active_elements |= mark_elements(mesh,enr_indicator, size)             
-                        # # Get dofs
+                        
                         ba_active_dofs = BitArray(fes.FreeDofs())
                         ba_active_dofs[:] = fes.FreeDofs()
                         
-                        ## apply algorithm on each element
                         for el in fes.Elements():
                             if ba_active_elements[el.nr]:
                                 i = ElementId(el)
+                                N = len(el.dofs)
                                 element = fes.GetFE(el)
-
-                                
                                 elementstd = V.GetFE(i)
                                 Nstd = elementstd.ndof
-
-                                # print("Nstd:",Nstd)
-                                # print("el.dofs:",el.dofs)
-
                                 trafo = mesh.GetTrafo(i)
                                 # Get element matrix 
                                 elmat = ipintegrator.CalcElementMatrix(element, trafo)           
-                                N = len(el.dofs)
                                 important = [True  if el.dofs[i]>=0 else False for i in range(N)]
                                 before_important = [True  if el.dofs[i]>=0 else False for i in range(N)]
                                 
                                 factors=[]
                                 for i in range(Nstd,N):
-                                  # print(i,el.dofs[i])
                                   if important[i]:
                                     active = [j for j in range(i) if important[j]]
                                     factor = 1 - 2 * sum([elmat[i,j]**2/elmat[i,i]/elmat[j,j] for j in active])
                                     factor += sum([elmat[i,j]*elmat[i,k]*elmat[j,k]/elmat[i,i]/elmat[j,j]/elmat[k,k] for j in active for k in active])
                                     factor = sqrt(abs(factor))
                                     factors.append(factor)
-                                    # print("factor:",factor)
                                     if (factor <= 1e-3):
                                         important[i] = False
                                         if el.dofs[i] >= 0:
-                                            ba_active_dofs[el.dofs[i]] = False                                            
+                                            ba_active_dofs[el.dofs[i]] = False 
 
-                        # print(ba_active_dofs)
-                        # print("active dofs:",sum(ba_active_dofs))
-                        # print("fes dofs:", fes.ndof)
-
-                        u = EnrichmentProxy(fes.TrialFunction(), self.config['enrich_functions'])
-                        v = EnrichmentProxy(fes.TestFunction(), self.config['enrich_functions'])
-
-                        
                         jump_u = u-u.Other()
                         jump_v = v-v.Other()
 
@@ -123,35 +105,29 @@ class Discontinous_Galerkin():
                         uup = IfPos(b * n, u(), u.Other()())
                         convection = -b * u * grad(v) * dy + b * n * uup * jump_v * dX
 
-                        acd = BilinearForm(fes)
-                        acd += self.config['epsilon'] * diffusion + convection
                         
+                        # lhs
+                        acd = BilinearForm(fes)
+                        acd += self.config['epsilon'] * diffusion + convection 
                         with TaskManager():
                             acd.Assemble()
 
                         # rhs
                         f = LinearForm(fes)
                         f += self.config['coeff'] * v * dy
-                        
                         with TaskManager():
                             f.Assemble()
 
+                        # solve the system
                         gfu = GridFunction(fes, name="uDG")
-                        
-                        
-                        # try:
-                        gfu.vec.data = acd.mat.Inverse(ba_active_dofs,inverse="umfpack") * f.vec
-                        # except:
-                        #     gfu.vec.data = acd.mat.Inverse(ba_active_dofs,inverse="sparsecholesky") * f.vec
-                        
+                        gfu.vec.data = acd.mat.Inverse(ba_active_dofs,inverse="pardiso") * f.vec
                         gfu = gfu.components[0] + sum([gfu.components[i+1]*self.config['enrich_functions'][i] for i in range(len(self.config['enrich_functions']))])
-
-                        #WebGuiDraw(gfu,mesh,"u")
                     
-                        error = sqrt (Integrate ((gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order = 30 + bonus_int))
-                        self.edg_table.loc[len(self.edg_table)] = [order, size, error, alpha, bonus_int, 'edg']
+                        # error
+                        error = sqrt (Integrate ((gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order = bonus_int))
 
-                        print ('Order:', order, 'Mesh Size:', size , "L2-error:", error)
+                        self.edg_table.loc[len(self.edg_table)] = [order, size, error, alpha, bonus_int, 'edg']
+                        print ('Order:', order, 'Alpha:', alpha, 'Bonus Int:', bonus_int, 'Mesh Size:', size , "L2-error:", error)
 
         return self.edg_table
 
@@ -167,8 +143,7 @@ class Discontinous_Galerkin():
                         mesh = Mesh(unit_square.GenerateMesh(maxh=size))
                         fes = L2(mesh, order=order, dgjumps=True)
                         u, v = fes.TnT()
-    
-                        # print("active dofs:",sum(fes.FreeDofs()))
+                        
                         jump_u = u-u.Other()
                         jump_v = v-v.Other()
                         n = specialcf.normal(2)
@@ -176,7 +151,6 @@ class Discontinous_Galerkin():
                         mean_dvdn = 0.5 * n * (grad(v) + grad(v.Other()))
     
                         h = specialcf.mesh_size
-    
     
                         dy = dx(bonus_intorder = bonus_int)
                         dX = dx(skeleton=True, bonus_intorder= bonus_int)
@@ -204,12 +178,12 @@ class Discontinous_Galerkin():
                         f += self.config['coeff'] * v * dy
                         with TaskManager():
                             f.Assemble()
-    
+
                         gfu = GridFunction(fes, name="uDG")  
-                        gfu.vec.data = acd.mat.Inverse(freedofs=fes.FreeDofs(),inverse="umfpack") * f.vec
+                        gfu.vec.data = acd.mat.Inverse(freedofs=fes.FreeDofs(), inverse="pardiso") * f.vec
                         
-                        error = sqrt (Integrate ((gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order = 30 + bonus_int))
+                        error = sqrt (Integrate ((gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order = bonus_int))
                         self.dg_table.loc[len(self.dg_table)] = [order, size, error, alpha, bonus_int, 'dg']
 
-                        print ('Order:', order, 'Mesh Size:', size , "L2-error:", error)
-            return self.dg_table
+                        print ('Order:', order, 'Alpha:', alpha, 'Bonus Int:', bonus_int, 'Mesh Size:', size , "L2-error:", error)
+        return self.dg_table

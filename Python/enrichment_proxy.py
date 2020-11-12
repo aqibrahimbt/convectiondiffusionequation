@@ -124,6 +124,7 @@ class EnrichmentProxy_VOL(CoefficientFunction):
             mygrad += ngsolvegrad(self.func[2+2*i])* self.enr_list[i]
         return mygrad
 
+
 def grad(q):
     if type(q) == ProxyFunction:
         return ngsolvegrad(q)
