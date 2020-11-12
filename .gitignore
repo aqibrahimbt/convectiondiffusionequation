@@ -1,0 +1,10 @@
+.DS_Store
+.idea
+.vscode
+thesis.code-workspace
+.ipynb_checkpoints
+Python/__pycache__
+Jupyter/.ipynb_checkpoints
+Examples/.idea
+Examples/.ipynb_checkpoints
+Examples/.vscode
