@@ -16,7 +16,7 @@ class EnrichmentProxy(CoefficientFunction):
         self.func = func
         self.enr_list = enr_list
         self.grad_list = [CoefficientFunction(
-            (coeff.Diff(x), coeff.Diff(y))) for coeff in self.enr_list]
+            (coeff.Diff(x), coeff.Diff(y))) for coeff in self.enr_list or []]
 
     def __call__(self):
         return self.func[0] + sum([self.func[i]*self.enr_list[i-1] for i in range(1, len(self.enr_list)+1) or []])
@@ -80,7 +80,7 @@ class EnrichmentProxy_VOL(CoefficientFunction):
         self.func = func
         self.enr_list = enr_list
         self.grad_list = [CoefficientFunction(
-            (coeff.Diff(x), coeff.Diff(y))) for coeff in self.enr_list]
+            (coeff.Diff(x), coeff.Diff(y))) for coeff in self.enr_list or []]
 
     def __call__(self):
         return self.func[0] + sum([self.func[2 + 2 * i] * self.enr_list[i] for i in range(0, len(self.enr_list)) or []])

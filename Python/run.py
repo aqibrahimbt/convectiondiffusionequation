@@ -36,10 +36,10 @@ config = {
     'epsilon': 0.01,
     'exact': exact,
     'coeff': coeff,
-    'alpha': [5],
-    'bonus_int_order' : [10],
+    'alpha': [500],
+    'bonus_int_order' : [20],
     'enrich_functions':[p(x), q(y)],
-    'enrich_domain_ind':[lambda x,y,h: x > 1 - h/2, lambda x,y,h: y > 1 - h/2],
+    'enrich_domain_ind':[lambda x,y,h: x > 1 - h, lambda x,y,h: y > 1 - h],
 }
 
 
@@ -48,19 +48,21 @@ if __name__ == "__main__":
     # with enrichment
     CT = Convection_Diffusion(config)
     edg_table = CT._solveEDG()
-    ehdg_table = CT._solveEHDG()
+    #ehdg_table = CT._solveEHDG()
     
     
-    # without enrichment
+    # # without enrichment
     dict = {'enrich_functions':[]}
     config.update(dict)
     CT = Convection_Diffusion(config)
     dg_table = CT._solveEDG()
-    hdg_table = CT._solveEHDG()
+    #hdg_table = CT._solveEHDG()
 
 
     # visualizations
     dg = pd.concat([dg_table, edg_table])
-    hdg = pd.concat([hdg_table, ehdg_table])
+    #dg.to_csv("results.csv")
+    #dg.to_csv('dg.csv')
+    #hdg = pd.concat([hdg_table, ehdg_table])
     plot_comparison(dg)
-    plot_comparison(hdg)
+    #plot_comparison(hdg)

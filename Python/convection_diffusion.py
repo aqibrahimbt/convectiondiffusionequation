@@ -1,5 +1,4 @@
 import numpy as np
-from scipy import linalg
 import pandas as pd
 
 from enrichment_proxy import *
@@ -53,7 +52,6 @@ class Convection_Diffusion():
 
                         if len(self.config['enrich_functions']) > 0:
                             type = str('edg')
-                            print(type)
                         # Checking linear dependence
                             ipintegrator = SymbolicBFI(
                                 u() * v(), bonus_intorder=bonus_int)
@@ -75,8 +73,8 @@ class Convection_Diffusion():
                                         element, trafo)
                                     important = [True if el.dofs[i] >=
                                                 0 else False for i in range(N)]
-                                    before_important = [
-                                        True if el.dofs[i] >= 0 else False for i in range(N)]
+                                    # before_important = [
+                                    #     True if el.dofs[i] >= 0 else False for i in range(N)]
 
                                     factors = []
                                     for i in range(Nstd, N):
@@ -97,7 +95,6 @@ class Convection_Diffusion():
                                                                 ] = False
                         else:
                             type = str('dg')
-                            print(type)
                         
                         jump_u = u-u.Other()
                         jump_v = v-v.Other()
@@ -114,9 +111,16 @@ class Convection_Diffusion():
                         # diffusion equation
                         diffusion = grad(u) * grad(v) * dy \
                             + alpha * order ** 2 / h * jump_u * jump_v * dX \
-                            + (-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
-                            + alpha * order ** 2/h * u * v * dS \
-                            + (-n * grad(u) * v - n * grad(v) * u) * dS
+                            + (-mean_dudn * jump_v + mean_dvdn * jump_u) * dX \
+                            - (alpha * order ** 2/h * u * v * dS \
+                            + (-n * grad(u) * v - n * grad(v) * u) * dS)
+
+                        # # diffusion equation
+                        # diffusion = grad(u) * grad(v) * dy \
+                        #     + alpha * order ** 2 / h * jump_u * jump_v * dX \
+                        #     + (-mean_dudn * jump_v + mean_dvdn * jump_u) * dX \
+                        #     + alpha * order ** 2/h * u * v * dS \
+                        #     + (-n * grad(u) * v + n * grad(v) * u) * dS
 
                         # convection equation
                         b = CoefficientFunction(
@@ -126,7 +130,7 @@ class Convection_Diffusion():
                             grad(v) * dy + b * n * uup * jump_v * dX
 
                         # lhs
-                        acd = BilinearForm(fes)
+                        acd = BilinearForm(fes, symmetric=False)
                         acd += self.config['epsilon'] * diffusion + convection
                         with TaskManager():
                             acd.Assemble()
@@ -141,7 +145,7 @@ class Convection_Diffusion():
                         gfu = GridFunction(fes, name="uDG")
                         gfu.vec.data = acd.mat.Inverse(ba_active_dofs, inverse="pardiso") * f.vec
 
-                        gfu = gfu.components[0] + sum([gfu.components[i+1]*self.config['enrich_functions'][i]
+                        gfu = gfu.components[0] + sum([gfu.components[i+1]* self.config['enrich_functions'][i]
                                                        for i in range(len(self.config['enrich_functions']))])
 
                         # error
@@ -150,8 +154,8 @@ class Convection_Diffusion():
 
                         self.results.loc[len(self.results)] = [
                             order, size, error, alpha, bonus_int, type]
-                        print('Order:', order, 'Alpha:', alpha, 'Bonus Int:',
-                              bonus_int, 'Mesh Size:', size, "L2-error:", error, 'type:', type)
+                        print('order:', order, 'alpha:', alpha, 'bonus_int:',
+                              bonus_int, 'mesh_size:', size, "err:", error, 'type:', type)
 
         return self.results
 
@@ -191,71 +195,69 @@ class Convection_Diffusion():
 
                         h = specialcf.mesh_size
                         n = specialcf.normal(mesh.dim)
-                        dS = dx(element_boundary=True,
-                                bonus_intorder=bonus_int)
+                        dS = dx(element_boundary=True, bonus_intorder=bonus_int)
                         dy = dx(bonus_intorder=bonus_int)
 
                         ba_active_dofs = BitArray(fes.FreeDofs())
                         ba_active_dofs[:] = fes.FreeDofs()
 
+                        # Checking linear dependence
                         if len(self.config['enrich_functions']) > 0:
-                            type = 'ehdg'
+                            type = 'ehdg' 
+                            ipintegrator = SymbolicBFI(
+                                u() * v(), bonus_intorder=bonus_int)
+                            ba_active_elements = BitArray(mesh.ne)
+                            for enr_indicator in self.config['enrich_domain_ind']:
+                                ba_active_elements |= mark_elements(
+                                    mesh, enr_indicator, size)
+
+                            for el in fes.Elements():
+                                if ba_active_elements[el.nr]:
+                                    i = ElementId(el)
+                                    N = len(el.dofs)
+                                    element = fes.GetFE(el)
+                                    elementstd = V.GetFE(i)
+                                    Nstd = elementstd.ndof
+                                    trafo = mesh.GetTrafo(i)
+                                    # Get element matrix
+                                    elmat = ipintegrator.CalcElementMatrix(
+                                        element, trafo)
+                                    important = [True if el.dofs[i] >=
+                                                0 else False for i in range(N)]
+                                    before_important = [
+                                        True if el.dofs[i] >= 0 else False for i in range(N)]
+
+                                    factors = []
+                                    for i in range(Nstd, N):
+                                        if important[i]:
+                                            active = [j for j in range(
+                                                i) if important[j]]
+                                            try:
+                                                factor = 1 - 2 * \
+                                                    sum([elmat[i, j]**2/elmat[i, i] /
+                                                        elmat[j, j] for j in active])
+                                                factor += sum([elmat[i, j] * elmat[i, k] * elmat[j, k]/elmat[i, i] /
+                                                            elmat[j, j]/elmat[k, k] for j in active for k in active])
+                                                factor = np.sqrt(abs(factor))
+                                                factors.append(factor)
+                                                if (factor <= 1e-3):
+                                                    print('runnin this')
+                                                    important[i] = False
+                                                    if el.dofs[i] <= 1e-3:
+                                                        ba_active_dofs[el.dofs[i]
+                                                                    ] = False
+                                            except:
+                                                pass
+
                         else:
                             type = 'hdg'
-
-                        # Checking linear dependence
-                        # if len(self.config['enrich_functions']) > 0:
-                        #     ipintegrator = SymbolicBFI(
-                        #         u() * v(), bonus_intorder=bonus_int)
-                        #     ba_active_elements = BitArray(mesh.ne)
-                        #     for enr_indicator in self.config['enrich_domain_ind']:
-                        #         ba_active_elements |= mark_elements(
-                        #             mesh, enr_indicator, size)
-
-                        #     for el in fes.Elements():
-                        #         if ba_active_elements[el.nr]:
-                        #             i = ElementId(el)
-                        #             N = len(el.dofs)
-                        #             element = fes.GetFE(el)
-                        #             elementstd = V.GetFE(i)
-                        #             Nstd = elementstd.ndof
-                        #             trafo = mesh.GetTrafo(i)
-                        #             # Get element matrix
-                        #             elmat = ipintegrator.CalcElementMatrix(
-                        #                 element, trafo)
-                        #             important = [True if el.dofs[i] >=
-                        #                         0 else False for i in range(N)]
-                        #             before_important = [
-                        #                 True if el.dofs[i] >= 0 else False for i in range(N)]
-
-                        #             factors = []
-                        #             for i in range(Nstd, N):
-                        #                 if important[i]:
-                        #                     active = [j for j in range(
-                        #                         i) if important[j]]
-                        #                     try:
-                        #                         factor = 1 - 2 * \
-                        #                             sum([elmat[i, j]**2/elmat[i, i] /
-                        #                                 elmat[j, j] for j in active])
-                        #                         factor += sum([elmat[i, j]*elmat[i, k]*elmat[j, k]/elmat[i, i] /
-                        #                                     elmat[j, j]/elmat[k, k] for j in active for k in active])
-                        #                         factor = sqrt(abs(factor))
-                        #                         factors.append(factor)
-                        #                         if (factor <= 1e-3):
-                        #                             important[i] = False
-                        #                             if el.dofs[i] >= 0:
-                        #                                 ba_active_dofs[el.dofs[i]
-                        #                                             ] = False
-                        #                     except:
-                        #                         ba_active_dofs[el.dofs[i]] = True
-
+                        
                         jump_u = u-uhat()
                         jump_v = v-vhat()
 
                         # diffusion
                         diffusion = grad(u) * grad(v) * dy \
-                            + alpha * order ** 2/h * jump_u * jump_v * dS \
-                            + (-grad(u) * n * jump_v - grad(v) * n * jump_u) * dS
+                            + alpha * order ** 2/h * jump_u * jump_v * dS + (-grad(u) * n * jump_v) * dS #- grad(v) * n * jump_u) * dS
 
                         # convection
                         b = CoefficientFunction(
@@ -292,6 +294,6 @@ class Convection_Diffusion():
                         self.results.loc[len(self.results)] = [
                             order, size, error, alpha, bonus_int, type]
 
-                        print('Order:', order, 'Alpha:', alpha, 'Bonus Int:',
-                              bonus_int, 'Mesh Size:', size, "L2-error:", error, "type:", type)
+                        print('h:', order, 'alpha:', alpha, 'bonus_int:',
+                              bonus_int, 'h:', size, "err:", error, 'type:', type)
         return self.results
