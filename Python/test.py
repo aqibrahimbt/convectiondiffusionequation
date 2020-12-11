@@ -32,7 +32,7 @@ def plot_comparison(table, alpha):
 
 
 
-results = pd.read_csv('results.csv', header='infer', index_col=0)
+results = pd.read_csv('nonsymmetric_results.csv', header='infer', index_col=0)
 alphas = range(5, 105, 5)
 for value in alphas:
     plot_comparison(results, value)

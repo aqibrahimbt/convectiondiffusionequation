@@ -36,7 +36,7 @@ config = {
     'epsilon': 0.01,
     'exact': exact,
     'coeff': coeff,
-    'alpha': [500],
+    'alpha': range(5, 105, 5),
     'bonus_int_order' : [20],
     'enrich_functions':[p(x), q(y)],
     'enrich_domain_ind':[lambda x,y,h: x > 1 - h, lambda x,y,h: y > 1 - h],
@@ -61,8 +61,8 @@ if __name__ == "__main__":
 
     # visualizations
     dg = pd.concat([dg_table, edg_table])
-    #dg.to_csv("results.csv")
+    dg.to_csv("nonsymmetric_results.csv")
     #dg.to_csv('dg.csv')
     #hdg = pd.concat([hdg_table, ehdg_table])
-    plot_comparison(dg)
+    #plot_comparison(dg)
     #plot_comparison(hdg)

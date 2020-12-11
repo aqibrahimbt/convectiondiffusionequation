@@ -7,7 +7,7 @@ from enrichment_proxy import *
 """
 Solving the Convection-Diffusion using the Enriched (DG and HDG) method
 TODO: Linear Dependence for HDG - Issue: (Division by zero)
-BUG: Spurious kinks in error for both DG and HDG
+BUG: Spurious kinks in error for both DG and HDG. However this is better for very large alphas and non-symmetric versions of the problem
 """
 
 
@@ -52,47 +52,47 @@ class Convection_Diffusion():
 
                         if len(self.config['enrich_functions']) > 0:
                             type = str('edg')
-                        # Checking linear dependence
-                            ipintegrator = SymbolicBFI(
-                                u() * v(), bonus_intorder=bonus_int)
-                            ba_active_elements = BitArray(mesh.ne)
-                            for enr_indicator in self.config['enrich_domain_ind']:
-                                ba_active_elements |= mark_elements(
-                                    mesh, enr_indicator, size)
+                        # # Checking linear dependence
+                        #     ipintegrator = SymbolicBFI(
+                        #         u() * v(), bonus_intorder=bonus_int)
+                        #     ba_active_elements = BitArray(mesh.ne)
+                        #     for enr_indicator in self.config['enrich_domain_ind']:
+                        #         ba_active_elements |= mark_elements(
+                        #             mesh, enr_indicator, size)
 
-                            for el in fes.Elements():
-                                if ba_active_elements[el.nr]:
-                                    i = ElementId(el)
-                                    N = len(el.dofs)
-                                    element = fes.GetFE(el)
-                                    elementstd = V.GetFE(i)
-                                    Nstd = elementstd.ndof
-                                    trafo = mesh.GetTrafo(i)
-                                    # Get element matrix
-                                    elmat = ipintegrator.CalcElementMatrix(
-                                        element, trafo)
-                                    important = [True if el.dofs[i] >=
-                                                0 else False for i in range(N)]
-                                    # before_important = [
-                                    #     True if el.dofs[i] >= 0 else False for i in range(N)]
+                        #     for el in fes.Elements():
+                        #         if ba_active_elements[el.nr]:
+                        #             i = ElementId(el)
+                        #             N = len(el.dofs)
+                        #             element = fes.GetFE(el)
+                        #             elementstd = V.GetFE(i)
+                        #             Nstd = elementstd.ndof
+                        #             trafo = mesh.GetTrafo(i)
+                        #             # Get element matrix
+                        #             elmat = ipintegrator.CalcElementMatrix(
+                        #                 element, trafo)
+                        #             important = [True if el.dofs[i] >=
+                        #                         0 else False for i in range(N)]
+                        #             # before_important = [
+                        #             #     True if el.dofs[i] >= 0 else False for i in range(N)]
 
-                                    factors = []
-                                    for i in range(Nstd, N):
-                                        if important[i]:
-                                            active = [j for j in range(
-                                                i) if important[j]]
-                                            factor = 1 - 2 * \
-                                                sum([elmat[i, j]**2/elmat[i, i] /
-                                                    elmat[j, j] for j in active])
-                                            factor += sum([elmat[i, j]*elmat[i, k]*elmat[j, k]/elmat[i, i] /
-                                                        elmat[j, j]/elmat[k, k] for j in active for k in active])
-                                            factor = sqrt(abs(factor))
-                                            factors.append(factor)
-                                            if (factor <= 1e-3):
-                                                important[i] = False
-                                                if el.dofs[i] >= 0:
-                                                    ba_active_dofs[el.dofs[i]
-                                                                ] = False
+                        #             factors = []
+                        #             for i in range(Nstd, N):
+                        #                 if important[i]:
+                        #                     active = [j for j in range(
+                        #                         i) if important[j]]
+                        #                     factor = 1 - 2 * \
+                        #                         sum([elmat[i, j]**2/elmat[i, i] /
+                        #                             elmat[j, j] for j in active])
+                        #                     factor += sum([elmat[i, j]*elmat[i, k]*elmat[j, k]/elmat[i, i] /
+                        #                                 elmat[j, j]/elmat[k, k] for j in active for k in active])
+                        #                     factor = sqrt(abs(factor))
+                        #                     factors.append(factor)
+                        #                     if (factor <= 1e-3):
+                        #                         important[i] = False
+                        #                         if el.dofs[i] >= 0:
+                        #                             ba_active_dofs[el.dofs[i]
+                        #                                         ] = False
                         else:
                             type = str('dg')
                         
@@ -112,8 +112,8 @@ class Convection_Diffusion():
                         diffusion = grad(u) * grad(v) * dy \
                             + alpha * order ** 2 / h * jump_u * jump_v * dX \
                             + (-mean_dudn * jump_v + mean_dvdn * jump_u) * dX \
-                            + (alpha * order ** 2/h * u * v * dS \
-                            + (-n * grad(u) * v - n * grad(v) * u) * dS)
+                            + (alpha * order ** 2/h * u * v * dS) \
+                            + (-n * grad(u) * v + n * grad(v) * u) * dS
 
                         # # diffusion equation
                         # diffusion = grad(u) * grad(v) * dy \
