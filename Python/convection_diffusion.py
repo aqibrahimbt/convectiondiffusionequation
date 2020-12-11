@@ -112,7 +112,7 @@ class Convection_Diffusion():
                         diffusion = grad(u) * grad(v) * dy \
                             + alpha * order ** 2 / h * jump_u * jump_v * dX \
                             + (-mean_dudn * jump_v + mean_dvdn * jump_u) * dX \
-                            - (alpha * order ** 2/h * u * v * dS \
+                            + (alpha * order ** 2/h * u * v * dS \
                             + (-n * grad(u) * v - n * grad(v) * u) * dS)
 
                         # # diffusion equation
