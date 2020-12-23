@@ -6,8 +6,8 @@ from enrichment_proxy import *
 
 """
 Solving the Convection-Diffusion using the Enriched (DG and HDG) method
-TODO: Linear Dependence for HDG - Issue: (Division by zero)
 BUG: Spurious kinks in error for both DG and HDG. However this is better for very large alphas and non-symmetric versions of the problem
+TOD0: Testing the inverse inequality
 """
 
 
