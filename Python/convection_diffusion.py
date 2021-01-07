@@ -6,8 +6,8 @@ from enrichment_proxy import *
 
 """
 Solving the Convection-Diffusion using the Enriched (DG and HDG) method
-BUG: Spurious kinks in error for both DG and HDG. However this is better for very large alphas and non-symmetric versions of the problem
-TOD0: Testing the inverse inequality
+BUG: Spurious kinks in error for both DG and HDG. However this is better for very large alphas and non-sy
+bug fixes fot non-symmetric version: 
 """
 
 
