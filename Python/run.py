@@ -51,17 +51,17 @@ if __name__ == "__main__":
     #ehdg_table = CT._solveEHDG()
     
     
-    # # without enrichment
-    dict = {'enrich_functions':[]}
-    config.update(dict)
-    CT = Convection_Diffusion(config)
-    dg_table = CT._solveEDG()
-    #hdg_table = CT._solveEHDG()
+    # # # without enrichment
+    # dict = {'enrich_functions':[]}
+    # config.update(dict)
+    # CT = Convection_Diffusion(config)
+    # dg_table = CT._solveEDG()
+    # #hdg_table = CT._solveEHDG()
 
 
-    # visualizations
-    dg = pd.concat([dg_table, edg_table])
-    dg.to_csv("nonsymmetric_results.csv")
+    # # visualizations
+    # dg = pd.concat([dg_table, edg_table])
+    # dg.to_csv("nonsymmetric_results.csv")
     #dg.to_csv('dg.csv')
     #hdg = pd.concat([hdg_table, ehdg_table])
     #plot_comparison(dg)

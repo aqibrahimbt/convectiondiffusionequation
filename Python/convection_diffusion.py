@@ -42,6 +42,8 @@ class Convection_Diffusion():
 
                         fes = FESpace(Vlist, dgjumps=True)
 
+                        print(fes.mat)
+
                         u = EnrichmentProxy(
                             fes.TrialFunction(), self.config['enrich_functions'])
                         v = EnrichmentProxy(
@@ -67,19 +69,19 @@ class Convection_Diffusion():
                         dX = dx(skeleton=True, bonus_intorder=bonus_int)
                         dS = ds(skeleton=True, bonus_intorder=bonus_int)
 
-                        # diffusion equation
+                        # non-symmetric diffusion equation
                         diffusion = grad(u) * grad(v) * dy \
                             + alpha * order ** 2 / h * jump_u * jump_v * dX \
                             + (-mean_dudn * jump_v + mean_dvdn * jump_u) * dX \
                             + (alpha * order ** 2/h * u * v * dS) \
                             + (-n * grad(u) * v + n * grad(v) * u) * dS
 
-                        # # diffusion equation
+                        # # symmetric diffusion equation
                         # diffusion = grad(u) * grad(v) * dy \
                         #     + alpha * order ** 2 / h * jump_u * jump_v * dX \
-                        #     + (-mean_dudn * jump_v + mean_dvdn * jump_u) * dX \
+                        #     + (-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
                         #     + alpha * order ** 2/h * u * v * dS \
-                        #     + (-n * grad(u) * v + n * grad(v) * u) * dS
+                        #     + (-n * grad(u) * v - n * grad(v) * u) * dS
 
                         # convection equation
                         b = CoefficientFunction(
@@ -99,6 +101,7 @@ class Convection_Diffusion():
                         f += self.config['coeff'] * v * dy
                         with TaskManager():
                             f.Assemble()
+
 
                         # solve the system
                         gfu = GridFunction(fes, name="uDG")
