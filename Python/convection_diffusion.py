@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import scipy.linalg
+from scipy import random
 
 from enrichment_proxy import *
 
@@ -42,8 +44,6 @@ class Convection_Diffusion():
 
                         fes = FESpace(Vlist, dgjumps=True)
 
-                        print(fes.mat)
-
                         u = EnrichmentProxy(
                             fes.TrialFunction(), self.config['enrich_functions'])
                         v = EnrichmentProxy(
@@ -69,19 +69,48 @@ class Convection_Diffusion():
                         dX = dx(skeleton=True, bonus_intorder=bonus_int)
                         dS = ds(skeleton=True, bonus_intorder=bonus_int)
 
-                        # non-symmetric diffusion equation
-                        diffusion = grad(u) * grad(v) * dy \
-                            + alpha * order ** 2 / h * jump_u * jump_v * dX \
-                            + (-mean_dudn * jump_v + mean_dvdn * jump_u) * dX \
-                            + (alpha * order ** 2/h * u * v * dS) \
-                            + (-n * grad(u) * v + n * grad(v) * u) * dS
+                        # stiffness matrix
+                        ## stiffness
+                        a_diff = SymbolicBFI(grad(u)*grad(v)) 
+                        fee = SymbolicLFI( h**((-2-order)/2)*v) 
+                        # mass
+                        m = SymbolicBFI(h*(grad(u)*n)*(grad(v)*n),element_boundary=True)
 
-                        # # symmetric diffusion equation
+                        constant = []
+                        for el in fes.Elements():
+                            #print("el.nr = {0}".format(el.nr))
+                            a_elmat = (a_diff.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
+                            
+                            # so far a_elmat contains only diffusion part 
+                            # we add the other part manually 
+                            f_elmat = (fee.CalcElementVector(el.GetFE(),el.GetTrafo())).NumPy()
+                            for i in range(len(f_elmat)):
+                                for j in range(len(f_elmat)):
+                                    # print("adding  =", f_elmat[i]*f_elmat[j])
+                                    a_elmat[i,j] += f_elmat[i]*f_elmat[j]
+                            m_elmat = (m.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
+                            x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
+                            if isinstance(x, complex):
+                                x =  x.real
+                            val = float("{:.2f}".format(x**2))
+                            constant.append(val)
+                            #input("Press key to proceed to next element")
+
+                        alpha = np.max(constant)
+
+                        # ## non-symmetric diffusion equation
                         # diffusion = grad(u) * grad(v) * dy \
                         #     + alpha * order ** 2 / h * jump_u * jump_v * dX \
-                        #     + (-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
-                        #     + alpha * order ** 2/h * u * v * dS \
-                        #     + (-n * grad(u) * v - n * grad(v) * u) * dS
+                        #     + (-mean_dudn * jump_v + mean_dvdn * jump_u) * dX \
+                        #     + (alpha * order ** 2/h * u * v * dS) \
+                        #     + (-n * grad(u) * v + n * grad(v) * u) * dS
+
+                        # symmetric diffusion equation
+                        diffusion = grad(u) * grad(v) * dy \
+                            + alpha * order ** 2 / h * jump_u * jump_v * dX \
+                            + (-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
+                            + alpha * order ** 2/h * u * v * dS \
+                            + (-n * grad(u) * v - n * grad(v) * u) * dS
 
                         # convection equation
                         b = CoefficientFunction(
@@ -102,7 +131,7 @@ class Convection_Diffusion():
                         with TaskManager():
                             f.Assemble()
 
-
+                        
                         # solve the system
                         gfu = GridFunction(fes, name="uDG")
                         gfu.vec.data = acd.mat.Inverse(ba_active_dofs, inverse="pardiso") * f.vec
