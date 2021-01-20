@@ -28,16 +28,17 @@ q = lambda y: y + (exp(beta[1]*(y-1)/eps)-exp(-beta[1]/eps))/(exp(-beta[1]/eps)-
 
 exact = p(x) * q(y)
 coeff =  beta[1] * p(x) +  beta[0] * q(y)
+#np.logspace(0,-1,num=30)
 
 config = {
-    'order': range(1, 5),
+    'order': [1],
     'beta': (beta[0],beta[1]),
-    'mesh_size': np.logspace(0,-1,num=20),
+    'mesh_size': [0.125],
     'epsilon': 0.01,
     'exact': exact,
     'coeff': coeff,
     'alpha': [5],
-    'bonus_int_order' : [20],
+    'bonus_int_order' : [15],
     'enrich_functions':[p(x), q(y)],
     'enrich_domain_ind':[lambda x,y,h: x > 1 - h, lambda x,y,h: y > 1 - h],
 }
@@ -52,17 +53,18 @@ if __name__ == "__main__":
     
     
     # # # without enrichment
-    dict = {'enrich_functions':[]}
-    config.update(dict)
-    CT = Convection_Diffusion(config)
-    dg_table = CT._solveEDG()
-    #hdg_table = CT._solveEHDG()
+    # dict = {'enrich_functions':[]}
+    # config.update(dict)
+    # CT = Convection_Diffusion(config)
+    # #dg_table = CT._solveEDG()
+    # hdg_table = CT._solveEHDG()
 
 
     # # # # visualizations
-    dg = pd.concat([dg_table, edg_table])
+    #dg = pd.concat([dg_table, edg_table])
     # dg.to_csv("symmetric_results_big.csv")
     #dg.to_csv('dg.csv')
     #hdg = pd.concat([hdg_table, ehdg_table])
-    plot_comparison(dg)
+    #hdg.to_csv("hdg_symmetric_results.csv")
+    #plot_comparison(ehdg_table)
     #plot_comparison(hdg)

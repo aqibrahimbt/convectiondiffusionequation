@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import netgen.gui
 import scipy.linalg
 from scipy import random
 
@@ -51,11 +52,6 @@ class Convection_Diffusion():
 
                         ba_active_dofs = BitArray(fes.FreeDofs())
                         ba_active_dofs[:] = fes.FreeDofs()
-
-                        if len(self.config['enrich_functions']) > 0:
-                            type = str('edg')
-                        else:
-                            type = str('dg')
                         
                         jump_u = u-u.Other()
                         jump_v = v-v.Other()
@@ -69,34 +65,39 @@ class Convection_Diffusion():
                         dX = dx(skeleton=True, bonus_intorder=bonus_int)
                         dS = ds(skeleton=True, bonus_intorder=bonus_int)
 
-                        # stiffness matrix
-                        ## stiffness
-                        a_diff = SymbolicBFI(grad(u)*grad(v)) 
-                        fee = SymbolicLFI( h**((-2-order)/2)*v) 
-                        # mass
-                        m = SymbolicBFI(h*(grad(u)*n)*(grad(v)*n),element_boundary=True)
-
-                        constant = []
-                        for el in fes.Elements():
-                            #print("el.nr = {0}".format(el.nr))
-                            a_elmat = (a_diff.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
+                        if len(self.config['enrich_functions']) > 0:
+                            type = str('edg')
+                            #stiffness matrix
+                            # stiffness
+                            # a_diff = SymbolicBFI(grad(u)*grad(v), bonus_intorder=bonus_int) 
+                            # fee = SymbolicLFI(h**((-2-order)/2)*v) 
                             
-                            # so far a_elmat contains only diffusion part 
-                            # we add the other part manually 
-                            f_elmat = (fee.CalcElementVector(el.GetFE(),el.GetTrafo())).NumPy()
-                            for i in range(len(f_elmat)):
-                                for j in range(len(f_elmat)):
-                                    # print("adding  =", f_elmat[i]*f_elmat[j])
-                                    a_elmat[i,j] += f_elmat[i]*f_elmat[j]
-                            m_elmat = (m.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
-                            x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
-                            if isinstance(x, complex):
-                                x =  x.real
-                            val = float("{:.2f}".format(x**2))
-                            constant.append(val)
-                            #input("Press key to proceed to next element")
+                            # # mass
+                            # m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True, bonus_intorder=bonus_int)
 
-                        alpha = np.max(constant)
+                            # constant = []
+                            # for el in fes.Elements():
+                            #     #print("el.nr = {0}".format(el.nr))
+                            #     a_elmat = (a_diff.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
+                                
+                            #     # so far a_elmat contains only diffusion part 
+                            #     # we add the other part manually 
+                            #     f_elmat = (fee.CalcElementVector(el.GetFE(),el.GetTrafo())).NumPy()
+                            #     for i in range(len(f_elmat)):
+                            #         for j in range(len(f_elmat)):
+                            #             # print("adding  =", f_elmat[i]*f_elmat[j])
+                            #             a_elmat[i,j] += f_elmat[i]*f_elmat[j]
+                            #     m_elmat = (m.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
+                            #     x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
+                            #     if isinstance(x, complex):
+                            #         x =  x.real
+                            #     val = float("{:.2f}".format(x**2))
+                            #     constant.append(val)
+                            #     #input("Press key to proceed to next element")
+
+                            # alpha = round(np.max(constant), 0)
+                        else:
+                            type = str('dg')
 
                         # ## non-symmetric diffusion equation
                         # diffusion = grad(u) * grad(v) * dy \
@@ -105,7 +106,7 @@ class Convection_Diffusion():
                         #     + (alpha * order ** 2/h * u * v * dS) \
                         #     + (-n * grad(u) * v + n * grad(v) * u) * dS
 
-                        # symmetric diffusion equation
+                        ## symmetric diffusion equation
                         diffusion = grad(u) * grad(v) * dy \
                             + alpha * order ** 2 / h * jump_u * jump_v * dX \
                             + (-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
@@ -138,7 +139,8 @@ class Convection_Diffusion():
 
                         gfu = gfu.components[0] + sum([gfu.components[i+1]* self.config['enrich_functions'][i]
                                                        for i in range(len(self.config['enrich_functions']))])
-
+                        
+                        Draw(gfu, mesh,"u")
                         # error
                         error = sqrt(Integrate(
                             (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order=bonus_int))
@@ -192,54 +194,38 @@ class Convection_Diffusion():
                         ba_active_dofs = BitArray(fes.FreeDofs())
                         ba_active_dofs[:] = fes.FreeDofs()
 
-                        # Checking linear dependence
+                        # # Checking linear dependence
                         if len(self.config['enrich_functions']) > 0:
                             type = 'ehdg' 
-                            ipintegrator = SymbolicBFI(
-                                u() * v(), bonus_intorder=bonus_int)
-                            ba_active_elements = BitArray(mesh.ne)
-                            for enr_indicator in self.config['enrich_domain_ind']:
-                                ba_active_elements |= mark_elements(
-                                    mesh, enr_indicator, size)
+                            # stiffness matrix
+                            ## stiffness
+                            a_diff = SymbolicBFI(grad(u)*grad(v)) 
+                            fee = SymbolicLFI(h**((-2-order)/2)*v) 
+                            
+                            # mass
+                            m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True)
 
+                            constant = []
                             for el in fes.Elements():
-                                if ba_active_elements[el.nr]:
-                                    i = ElementId(el)
-                                    N = len(el.dofs)
-                                    element = fes.GetFE(el)
-                                    elementstd = V.GetFE(i)
-                                    Nstd = elementstd.ndof
-                                    trafo = mesh.GetTrafo(i)
-                                    # Get element matrix
-                                    elmat = ipintegrator.CalcElementMatrix(
-                                        element, trafo)
-                                    important = [True if el.dofs[i] >=
-                                                0 else False for i in range(N)]
-                                    before_important = [
-                                        True if el.dofs[i] >= 0 else False for i in range(N)]
+                                #print("el.nr = {0}".format(el.nr))
+                                a_elmat = (a_diff.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
+                                
+                                # so far a_elmat contains only diffusion part 
+                                # we add the other part manually 
+                                f_elmat = (fee.CalcElementVector(el.GetFE(),el.GetTrafo())).NumPy()
+                                for i in range(len(f_elmat)):
+                                    for j in range(len(f_elmat)):
+                                        # print("adding  =", f_elmat[i]*f_elmat[j])
+                                        a_elmat[i,j] += f_elmat[i]*f_elmat[j]
+                                m_elmat = (m.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
+                                x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
+                                if isinstance(x, complex):
+                                    x =  x.real
+                                val = float("{:.2f}".format(x**2))
+                                constant.append(val)
+                                #input("Press key to proceed to next element")
 
-                                    factors = []
-                                    for i in range(Nstd, N):
-                                        if important[i]:
-                                            active = [j for j in range(
-                                                i) if important[j]]
-                                            try:
-                                                factor = 1 - 2 * \
-                                                    sum([elmat[i, j]**2/elmat[i, i] /
-                                                        elmat[j, j] for j in active])
-                                                factor += sum([elmat[i, j] * elmat[i, k] * elmat[j, k]/elmat[i, i] /
-                                                            elmat[j, j]/elmat[k, k] for j in active for k in active])
-                                                factor = np.sqrt(abs(factor))
-                                                factors.append(factor)
-                                                if (factor <= 1e-3):
-                                                    print('runnin this')
-                                                    important[i] = False
-                                                    if el.dofs[i] <= 1e-3:
-                                                        ba_active_dofs[el.dofs[i]
-                                                                    ] = False
-                                            except:
-                                                pass
-
+                            alpha = np.max(constant)
                         else:
                             type = 'hdg'
                         
@@ -247,8 +233,7 @@ class Convection_Diffusion():
                         jump_v = v-vhat()
 
                         # diffusion
-                        diffusion = grad(u) * grad(v) * dy \
-                            + alpha * order ** 2/h * jump_u * jump_v * dS + (-grad(u) * n * jump_v) * dS #- grad(v) * n * jump_u) * dS
+                        diffusion = grad(u) * grad(v) * dy + alpha * order ** 2/h * jump_u * jump_v * dS + (-grad(u) * n * jump_v - grad(v) * n * jump_u) * dS
 
                         # convection
                         b = CoefficientFunction(
@@ -277,7 +262,7 @@ class Convection_Diffusion():
                         gfu = gfu.components[0] + sum([gfu.components[2*i+2] * self.config['enrich_functions'][i]
                                                        for i in range(len(self.config['enrich_functions']))])
 
-                        # Draw(gfu.components[0],mesh,"u")
+                        #Draw(gfu.components[0],mesh,"u")
 
                         error = sqrt(Integrate(
                             (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order=30 + bonus_int))
@@ -285,6 +270,6 @@ class Convection_Diffusion():
                         self.results.loc[len(self.results)] = [
                             order, size, error, alpha, bonus_int, type]
 
-                        print('h:', order, 'alpha:', alpha, 'bonus_int:',
+                        print('order:', order, 'alpha:', alpha, 'bonus_int:',
                               bonus_int, 'h:', size, "err:", error, 'type:', type)
         return self.results

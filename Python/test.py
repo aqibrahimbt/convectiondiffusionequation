@@ -28,12 +28,12 @@ def plot_comparison(table, alpha):
     for name, group in order_4.groupby('Type'):
         group.plot(x='Mesh Size', y='Error', ax=ax4, label=name, legend=True,title='k = 4'+ ' alpha=' + str(alpha), style='.-', loglog=True)
 
-    plt.savefig('symmetric_big/dg_alpha_' + str(alpha)) 
+    plt.savefig('hdg_symmetric/hdg_alpha_' + str(alpha)) 
 
 
 
-results = pd.read_csv('symmetric_results_big.csv', header='infer', index_col=0)
-alphas = range(500, 605, 10)
+results = pd.read_csv('hdg_symmetric_results.csv', header='infer', index_col=0)
+alphas = range(5, 105, 5)
 for value in alphas:
     plot_comparison(results, value)
     print('...............................')
