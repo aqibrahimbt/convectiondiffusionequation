@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import netgen.gui
 import scipy.linalg
 from scipy import random
 
@@ -67,35 +66,34 @@ class Convection_Diffusion():
 
                         if len(self.config['enrich_functions']) > 0:
                             type = str('edg')
-                            #stiffness matrix
+                            ## stiffness matrix
                             # stiffness
-                            # a_diff = SymbolicBFI(grad(u)*grad(v), bonus_intorder=bonus_int) 
-                            # fee = SymbolicLFI(h**((-2-order)/2)*v) 
+                            # a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=bonus_int) 
+                            # fee = SymbolicLFI(h**((-2-order)/2)* v * u, bonus_intorder=bonus_int) 
                             
                             # # mass
                             # m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True, bonus_intorder=bonus_int)
 
                             # constant = []
                             # for el in fes.Elements():
-                            #     #print("el.nr = {0}".format(el.nr))
                             #     a_elmat = (a_diff.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
                                 
-                            #     # so far a_elmat contains only diffusion part 
-                            #     # we add the other part manually 
                             #     f_elmat = (fee.CalcElementVector(el.GetFE(),el.GetTrafo())).NumPy()
                             #     for i in range(len(f_elmat)):
                             #         for j in range(len(f_elmat)):
-                            #             # print("adding  =", f_elmat[i]*f_elmat[j])
                             #             a_elmat[i,j] += f_elmat[i]*f_elmat[j]
                             #     m_elmat = (m.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
                             #     x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
+                            #     #print(x)
                             #     if isinstance(x, complex):
                             #         x =  x.real
-                            #     val = float("{:.2f}".format(x**2))
-                            #     constant.append(val)
+                            #     #val = float("{:.2f}".format(x**2))
+                            #     constant.append(x)
                             #     #input("Press key to proceed to next element")
-
-                            # alpha = round(np.max(constant), 0)
+                            # #print(constant)
+                            # #alpha = round(np.max(constant), 0)
+                            # alpha = sqrt(max(constant))
+                            #print(alpha)
                         else:
                             type = str('dg')
 
@@ -106,7 +104,7 @@ class Convection_Diffusion():
                         #     + (alpha * order ** 2/h * u * v * dS) \
                         #     + (-n * grad(u) * v + n * grad(v) * u) * dS
 
-                        ## symmetric diffusion equation
+                        # symmetric diffusion equation
                         diffusion = grad(u) * grad(v) * dy \
                             + alpha * order ** 2 / h * jump_u * jump_v * dX \
                             + (-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
