@@ -31,7 +31,7 @@ coeff =  beta[1] * p(x) +  beta[0] * q(y)
 #np.logspace(0,-1,num=30)
 
 config = {
-    'order': [1,2,3,4],
+    'order': [1,2,3, 4],
     'beta': (beta[0],beta[1]),
     'mesh_size': np.logspace(0,-1,num=20),
     'epsilon': 0.01,
@@ -39,7 +39,7 @@ config = {
     'coeff': coeff,
     'alpha': [1000],
     'bonus_int_order' : [20],
-    'enrich_functions':[p(x), q(y)],
+    'enrich_functions':[],
     'enrich_domain_ind':[lambda x,y,h: x > 1 - h, lambda x,y,h: y > 1 - h],
 }
 

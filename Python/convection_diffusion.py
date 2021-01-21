@@ -1,7 +1,8 @@
 import numpy as np
+from numpy.linalg.linalg import norm
 import pandas as pd
 import scipy.linalg
-from scipy import random
+import scipy as sp
 
 from enrichment_proxy import *
 
@@ -68,34 +69,72 @@ class Convection_Diffusion():
                             type = str('edg')
                             ## stiffness matrix
                             # stiffness
-                            # a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=bonus_int) 
-                            # fee = SymbolicLFI(h**((-2-order)/2)* v * u, bonus_intorder=bonus_int) 
+                            a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=bonus_int) 
+                            fee = SymbolicLFI(h**((-2-order)/2)* v, bonus_intorder=bonus_int) 
                             
-                            # # mass
-                            # m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True, bonus_intorder=bonus_int)
+                            # mass
+                            m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True, bonus_intorder=bonus_int)
 
-                            # constant = []
-                            # for el in fes.Elements():
-                            #     a_elmat = (a_diff.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
+                            constant = []
+                            for el in fes.Elements():
+                                a_elmat = (a_diff.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
                                 
-                            #     f_elmat = (fee.CalcElementVector(el.GetFE(),el.GetTrafo())).NumPy()
-                            #     for i in range(len(f_elmat)):
-                            #         for j in range(len(f_elmat)):
-                            #             a_elmat[i,j] += f_elmat[i]*f_elmat[j]
-                            #     m_elmat = (m.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
-                            #     x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
-                            #     #print(x)
-                            #     if isinstance(x, complex):
-                            #         x =  x.real
-                            #     #val = float("{:.2f}".format(x**2))
-                            #     constant.append(x)
-                            #     #input("Press key to proceed to next element")
-                            # #print(constant)
-                            # #alpha = round(np.max(constant), 0)
-                            # alpha = sqrt(max(constant))
-                            #print(alpha)
+                                f_elmat = (fee.CalcElementVector(el.GetFE(),el.GetTrafo())).NumPy()
+                                for i in range(len(f_elmat)):
+                                    for j in range(len(f_elmat)):
+                                        a_elmat[i,j] += f_elmat[i]*f_elmat[j]
+                                m_elmat = (m.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
+                                #x = np.max(np.linalg.eig(np.linalg.inv(a_elmat)@m_elmat)[0])
+                                L = np.linalg.cholesky(a_elmat) ## test for positive definiteness
+                                x = np.max((sp.linalg.eig(m_elmat,b=a_elmat))[0]) # this gives a complex value 
+                                # print(x.real)
+                                # a_size = norm(np.transpose(a_elmat) - a_elmat)
+                                # m_size = norm(np.transpose(m_elmat) - m_elmat)
+                                # print('a = ', a_size)
+                                # print('m = ', m_size)
+                                # print('...................')
+                                if isinstance(x, complex):
+                                    print("yes")
+                                else:
+                                    print("no")
+                                    x =  x.real
+                                constant.append(x)
+                            alpha = max(constant)
                         else:
+                            print('rinning without enrichment')
                             type = str('dg')
+                            a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=bonus_int) 
+                            fee = SymbolicLFI(h**((-2-order)/2)* v, bonus_intorder=bonus_int) 
+                            
+                            # mass
+                            m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True, bonus_intorder=bonus_int)
+
+                            constant = []
+                            for el in fes.Elements():
+                                a_elmat = (a_diff.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
+                                
+                                f_elmat = (fee.CalcElementVector(el.GetFE(),el.GetTrafo())).NumPy()
+                                for i in range(len(f_elmat)):
+                                    for j in range(len(f_elmat)):
+                                        a_elmat[i,j] += f_elmat[i]*f_elmat[j]
+                                m_elmat = (m.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
+                                #x = np.max(np.linalg.eig(np.linalg.inv(a_elmat)@m_elmat)[0])
+                                L = np.linalg.cholesky(a_elmat)
+                                x = np.max((sp.linalg.eig(m_elmat,b=a_elmat))[0])
+                                # print(x.real)
+                                # a_size = norm(np.transpose(a_elmat) - a_elmat)
+                                # m_size = norm(np.transpose(m_elmat) - m_elmat)
+                                # print('a = ', a_size)
+                                # print('m = ', m_size)
+                                # print('...................')
+                                ## TODO: gives complex number for singular matrix. 
+                                if isinstance(x, complex):
+                                    print("yes")
+                                else:
+                                    print("no")
+                                    x =  x.real
+                                constant.append(x)
+                            alpha = max(constant)
 
                         # ## non-symmetric diffusion equation
                         # diffusion = grad(u) * grad(v) * dy \
@@ -105,48 +144,48 @@ class Convection_Diffusion():
                         #     + (-n * grad(u) * v + n * grad(v) * u) * dS
 
                         # symmetric diffusion equation
-                        diffusion = grad(u) * grad(v) * dy \
-                            + alpha * order ** 2 / h * jump_u * jump_v * dX \
-                            + (-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
-                            + alpha * order ** 2/h * u * v * dS \
-                            + (-n * grad(u) * v - n * grad(v) * u) * dS
+                        # diffusion = grad(u) * grad(v) * dy \
+                        #     + alpha * order ** 2 / h * jump_u * jump_v * dX \
+                        #     + (-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
+                        #     + alpha * order ** 2/h * u * v * dS \
+                        #     + (-n * grad(u) * v - n * grad(v) * u) * dS
 
-                        # convection equation
-                        b = CoefficientFunction(
-                            (self.config['beta'][0], self.config['beta'][1]))
-                        uup = IfPos(b * n, u(), u.Other()())
-                        convection = -b * u * \
-                            grad(v) * dy + b * n * uup * jump_v * dX
+                        # # convection equation
+                        # b = CoefficientFunction(
+                        #     (self.config['beta'][0], self.config['beta'][1]))
+                        # uup = IfPos(b * n, u(), u.Other()())
+                        # convection = -b * u * \
+                        #     grad(v) * dy + b * n * uup * jump_v * dX
 
-                        # lhs
-                        acd = BilinearForm(fes, symmetric=False)
-                        acd += self.config['epsilon'] * diffusion + convection
-                        with TaskManager():
-                            acd.Assemble()
+                        # # lhs
+                        # acd = BilinearForm(fes, symmetric=False)
+                        # acd += self.config['epsilon'] * diffusion + convection
+                        # with TaskManager():
+                        #     acd.Assemble()
 
-                        # rhs
-                        f = LinearForm(fes)
-                        f += self.config['coeff'] * v * dy
-                        with TaskManager():
-                            f.Assemble()
+                        # # rhs
+                        # f = LinearForm(fes)
+                        # f += self.config['coeff'] * v * dy
+                        # with TaskManager():
+                        #     f.Assemble()
 
                         
-                        # solve the system
-                        gfu = GridFunction(fes, name="uDG")
-                        gfu.vec.data = acd.mat.Inverse(ba_active_dofs, inverse="pardiso") * f.vec
+                        # # solve the system
+                        # gfu = GridFunction(fes, name="uDG")
+                        # gfu.vec.data = acd.mat.Inverse(ba_active_dofs, inverse="pardiso") * f.vec
 
-                        gfu = gfu.components[0] + sum([gfu.components[i+1]* self.config['enrich_functions'][i]
-                                                       for i in range(len(self.config['enrich_functions']))])
+                        # gfu = gfu.components[0] + sum([gfu.components[i+1]* self.config['enrich_functions'][i]
+                        #                                for i in range(len(self.config['enrich_functions']))])
                         
-                        Draw(gfu, mesh,"u")
-                        # error
-                        error = sqrt(Integrate(
-                            (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order=bonus_int))
+                        # #Draw(gfu, mesh,"u")
+                        # # error
+                        # error = sqrt(Integrate(
+                        #     (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order=bonus_int))
 
-                        self.results.loc[len(self.results)] = [
-                            order, size, error, alpha, bonus_int, type]
-                        print('order:', order, 'alpha:', alpha, 'bonus_int:',
-                              bonus_int, 'mesh_size:', size, "err:", error, 'type:', type)
+                        # self.results.loc[len(self.results)] = [
+                        #     order, size, error, alpha, bonus_int, type]
+                        # print('order:', order, 'alpha:', alpha, 'bonus_int:',
+                        #       bonus_int, 'mesh_size:', size, "err:", error, 'type:', type)
 
         return self.results
 
