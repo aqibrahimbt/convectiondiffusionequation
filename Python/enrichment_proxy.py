@@ -3,6 +3,7 @@ from ngsolve import *
 from ngsolve import grad as ngsolvegrad
 from ngsolve.comp import ProxyFunction
 from ngsolve.webgui import Draw
+import numpy as np
 
 
 # Enrichment Proxy Functions for the DG method
@@ -240,3 +241,19 @@ def mark_element_bnd(Q, QF, mesh, enr_indicator, mesh_size):
             ba_F[i] = True
     QFx = Compress(QF, active_dofs=ba_F)
     return QFx
+
+
+
+def is_pos_def(A):
+    if np.array_equal(A, A.T):
+        try:
+            np.linalg.cholesky(A)
+            return True
+        except np.linalg.LinAlgError:
+            return False
+    else:
+        return False
+
+
+def check_symmetric(a, tol=1e-8):
+    return np.all(np.abs(a-a.T) < tol)

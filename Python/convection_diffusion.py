@@ -27,8 +27,8 @@ class Convection_Diffusion():
                         'Error', 'Alpha', 'Bonus Int', 'Type']
         self.results = pd.DataFrame(columns=self.columns)
 
-
     '''Enriched Discontinuous Galerkin Methods'''
+
     def _solveEDG(self):
         self.results.iloc[0:0]
         for order in self.config['order']:
@@ -41,7 +41,8 @@ class Convection_Diffusion():
                         Vlist = [V]
 
                         for enr_indicator in self.config['enrich_domain_ind'] or []:
-                            Vlist.append(mark_dofs(Q, mesh, enr_indicator, size))
+                            Vlist.append(
+                                mark_dofs(Q, mesh, enr_indicator, size))
 
                         fes = FESpace(Vlist, dgjumps=True)
 
@@ -52,7 +53,7 @@ class Convection_Diffusion():
 
                         ba_active_dofs = BitArray(fes.FreeDofs())
                         ba_active_dofs[:] = fes.FreeDofs()
-                        
+
                         jump_u = u-u.Other()
                         jump_v = v-v.Other()
 
@@ -65,78 +66,86 @@ class Convection_Diffusion():
                         dX = dx(skeleton=True, bonus_intorder=bonus_int)
                         dS = ds(skeleton=True, bonus_intorder=bonus_int)
 
+                        ba_active_dofs = BitArray(fes.FreeDofs())
+                        ba_active_dofs[:] = fes.FreeDofs()
+
                         if len(self.config['enrich_functions']) > 0:
                             type = str('edg')
-                            ## stiffness matrix
-                            # stiffness
-                            a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=bonus_int) 
-                            fee = SymbolicLFI(h**((-2-order)/2)* v, bonus_intorder=bonus_int) 
-                            
-                            # mass
-                            m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True, bonus_intorder=bonus_int)
 
-                            constant = []
+                            # Checking linear dependence
+                            ipintegrator = SymbolicBFI(
+                                u() * v(), bonus_intorder=bonus_int)
+                            ba_active_elements = BitArray(mesh.ne)
+
+                            for enr_indicator in self.config['enrich_domain_ind']:
+                                ba_active_elements |= mark_elements(
+                                    mesh, enr_indicator, size)
+
                             for el in fes.Elements():
-                                a_elmat = (a_diff.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
-                                
-                                f_elmat = (fee.CalcElementVector(el.GetFE(),el.GetTrafo())).NumPy()
-                                for i in range(len(f_elmat)):
-                                    for j in range(len(f_elmat)):
-                                        a_elmat[i,j] += f_elmat[i]*f_elmat[j]
-                                m_elmat = (m.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
-                                #x = np.max(np.linalg.eig(np.linalg.inv(a_elmat)@m_elmat)[0])
-                                L = np.linalg.cholesky(a_elmat) ## test for positive definiteness
-                                x = np.max((sp.linalg.eig(m_elmat,b=a_elmat))[0]) # this gives a complex value 
-                                # print(x.real)
-                                # a_size = norm(np.transpose(a_elmat) - a_elmat)
-                                # m_size = norm(np.transpose(m_elmat) - m_elmat)
-                                # print('a = ', a_size)
-                                # print('m = ', m_size)
-                                # print('...................')
-                                if isinstance(x, complex):
-                                    print("yes")
-                                else:
-                                    print("no")
-                                    x =  x.real
-                                constant.append(x)
-                            alpha = max(constant)
+                                if ba_active_elements[el.nr]:
+                                    i = ElementId(el)
+                                    N = len(el.dofs)
+                                    element = fes.GetFE(el)
+                                    elementstd = V.GetFE(i)
+                                    Nstd = elementstd.ndof
+                                    trafo = mesh.GetTrafo(i)
+                                    # Get element matrix
+                                    elmat = ipintegrator.CalcElementMatrix(
+                                        element, trafo)
+                                    important = [True if el.dofs[i] >=
+                                                 0 else False for i in range(N)]
+
+                                    factors = []
+                                    for i in range(Nstd, N):
+                                        if important[i]:
+                                            active = [j for j in range(
+                                                i) if important[j]]
+                                            factor = 1 - 2 * \
+                                                sum([elmat[i, j]**2/elmat[i, i] /
+                                                     elmat[j, j] for j in active])
+                                            factor += sum([elmat[i, j]*elmat[i, k]*elmat[j, k]/elmat[i, i] /
+                                                           elmat[j, j]/elmat[k, k] for j in active for k in active])
+                                            factor = sqrt(abs(factor))
+                                            factors.append(factor)
+                                            if (factor <= 1e-3):
+                                                important[i] = False
+                                                if el.dofs[i] >= 0:
+                                                    ba_active_dofs[el.dofs[i]
+                                                                   ] = False
                         else:
                             print('rinning without enrichment')
                             type = str('dg')
-                            a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=bonus_int) 
-                            fee = SymbolicLFI(h**((-2-order)/2)* v, bonus_intorder=bonus_int) 
-                            
-                            # mass
-                            m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True, bonus_intorder=bonus_int)
 
-                            constant = []
-                            for el in fes.Elements():
-                                a_elmat = (a_diff.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
-                                
-                                f_elmat = (fee.CalcElementVector(el.GetFE(),el.GetTrafo())).NumPy()
-                                for i in range(len(f_elmat)):
-                                    for j in range(len(f_elmat)):
-                                        a_elmat[i,j] += f_elmat[i]*f_elmat[j]
-                                m_elmat = (m.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
-                                #x = np.max(np.linalg.eig(np.linalg.inv(a_elmat)@m_elmat)[0])
-                                L = np.linalg.cholesky(a_elmat)
-                                x = np.max((sp.linalg.eig(m_elmat,b=a_elmat))[0])
-                                # print(x.real)
-                                # a_size = norm(np.transpose(a_elmat) - a_elmat)
-                                # m_size = norm(np.transpose(m_elmat) - m_elmat)
-                                # print('a = ', a_size)
-                                # print('m = ', m_size)
-                                # print('...................')
-                                ## TODO: gives complex number for singular matrix. 
-                                if isinstance(x, complex):
-                                    print("yes")
-                                else:
-                                    print("no")
-                                    x =  x.real
-                                constant.append(x)
-                            alpha = max(constant)
 
-                        # ## non-symmetric diffusion equation
+                        # stiffness
+                        a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=bonus_int)
+
+                        fee = SymbolicLFI(h**((-2-order)/2) * v, bonus_intorder=bonus_int)
+
+                        # mass
+                        m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True, bonus_intorder=bonus_int)
+
+                        alpha_stab = GridFunction(L2(mesh))
+
+                        for el in fes.Elements():
+                            a_elmat = (a_diff.CalcElementMatrix(el.GetFE(), el.GetTrafo())).NumPy()
+
+                            f_elmat = (fee.CalcElementVector(el.GetFE(), el.GetTrafo())).NumPy()
+
+                            for i in range(len(f_elmat)):
+                                for j in range(len(f_elmat)):
+                                    a_elmat[i, j] += f_elmat[i]*f_elmat[j]
+
+                            m_elmat = (m.CalcElementMatrix(el.GetFE(), el.GetTrafo())).NumPy()
+
+                            ## TODO: Matrix not positive definite
+                            x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
+
+                            alpha_stab.vec[el.nr] += x.real
+
+                        alpha = CoefficientFunction(2 * alpha_stab)
+
+                        # # non-symmetric diffusion equation
                         # diffusion = grad(u) * grad(v) * dy \
                         #     + alpha * order ** 2 / h * jump_u * jump_v * dX \
                         #     + (-mean_dudn * jump_v + mean_dvdn * jump_u) * dX \
@@ -144,53 +153,53 @@ class Convection_Diffusion():
                         #     + (-n * grad(u) * v + n * grad(v) * u) * dS
 
                         # symmetric diffusion equation
-                        # diffusion = grad(u) * grad(v) * dy \
-                        #     + alpha * order ** 2 / h * jump_u * jump_v * dX \
-                        #     + (-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
-                        #     + alpha * order ** 2/h * u * v * dS \
-                        #     + (-n * grad(u) * v - n * grad(v) * u) * dS
+                        diffusion = grad(u) * grad(v) * dy \
+                            + alpha * order ** 2 / h * jump_u * jump_v * dX \
+                            + (-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
+                            + alpha * order ** 2/h * u * v * dS \
+                            + (-n * grad(u) * v - n * grad(v) * u) * dS
 
-                        # # convection equation
-                        # b = CoefficientFunction(
-                        #     (self.config['beta'][0], self.config['beta'][1]))
-                        # uup = IfPos(b * n, u(), u.Other()())
-                        # convection = -b * u * \
-                        #     grad(v) * dy + b * n * uup * jump_v * dX
+                        # convection equation
+                        b = CoefficientFunction(
+                            (self.config['beta'][0], self.config['beta'][1]))
+                        uup = IfPos(b * n, u(), u.Other()())
+                        convection = -b * u * \
+                            grad(v) * dy + b * n * uup * jump_v * dX
 
-                        # # lhs
-                        # acd = BilinearForm(fes, symmetric=False)
-                        # acd += self.config['epsilon'] * diffusion + convection
-                        # with TaskManager():
-                        #     acd.Assemble()
+                        # lhs
+                        acd = BilinearForm(fes, symmetric=False)
+                        acd += self.config['epsilon'] * diffusion + convection
+                        with TaskManager():
+                            acd.Assemble()
 
-                        # # rhs
-                        # f = LinearForm(fes)
-                        # f += self.config['coeff'] * v * dy
-                        # with TaskManager():
-                        #     f.Assemble()
+                        # rhs
+                        f = LinearForm(fes)
+                        f += self.config['coeff'] * v * dy
+                        with TaskManager():
+                            f.Assemble()
 
-                        
-                        # # solve the system
-                        # gfu = GridFunction(fes, name="uDG")
-                        # gfu.vec.data = acd.mat.Inverse(ba_active_dofs, inverse="pardiso") * f.vec
+                        # solve the system
+                        gfu = GridFunction(fes, name="uDG")
+                        gfu.vec.data = acd.mat.Inverse(
+                            ba_active_dofs, inverse="pardiso") * f.vec
 
-                        # gfu = gfu.components[0] + sum([gfu.components[i+1]* self.config['enrich_functions'][i]
-                        #                                for i in range(len(self.config['enrich_functions']))])
-                        
-                        # #Draw(gfu, mesh,"u")
-                        # # error
-                        # error = sqrt(Integrate(
-                        #     (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order=bonus_int))
+                        gfu = gfu.components[0] + sum([gfu.components[i+1] * self.config['enrich_functions'][i]
+                                                       for i in range(len(self.config['enrich_functions']))])
 
-                        # self.results.loc[len(self.results)] = [
-                        #     order, size, error, alpha, bonus_int, type]
-                        # print('order:', order, 'alpha:', alpha, 'bonus_int:',
-                        #       bonus_int, 'mesh_size:', size, "err:", error, 'type:', type)
+                        #Draw(gfu, mesh,"u")
+                        # error
+                        error = sqrt(Integrate(
+                            (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order=bonus_int))
+
+                        self.results.loc[len(self.results)] = [
+                            order, size, error, 10, bonus_int, type]
+                        print('order:', order, 'bonus_int:',
+                              bonus_int, 'mesh_size:', size, "err:", error, 'type:', type)
 
         return self.results
 
-
     '''Enriched (Hybrid) Discontinuous Galerkin Methods'''
+
     def _solveEHDG(self):
         self.results.iloc[0:0]
         for order in self.config['order']:
@@ -225,7 +234,8 @@ class Convection_Diffusion():
 
                         h = specialcf.mesh_size
                         n = specialcf.normal(mesh.dim)
-                        dS = dx(element_boundary=True, bonus_intorder=bonus_int)
+                        dS = dx(element_boundary=True,
+                                bonus_intorder=bonus_int)
                         dy = dx(bonus_intorder=bonus_int)
 
                         ba_active_dofs = BitArray(fes.FreeDofs())
@@ -233,31 +243,36 @@ class Convection_Diffusion():
 
                         # # Checking linear dependence
                         if len(self.config['enrich_functions']) > 0:
-                            type = 'ehdg' 
+                            type = 'ehdg'
                             # stiffness matrix
-                            ## stiffness
-                            a_diff = SymbolicBFI(grad(u)*grad(v)) 
-                            fee = SymbolicLFI(h**((-2-order)/2)*v) 
-                            
+                            # stiffness
+                            a_diff = SymbolicBFI(grad(u)*grad(v))
+                            fee = SymbolicLFI(h**((-2-order)/2)*v)
+
                             # mass
-                            m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True)
+                            m = SymbolicBFI(
+                                h * (grad(u) * n)*(grad(v) * n), element_boundary=True)
 
                             constant = []
                             for el in fes.Elements():
                                 #print("el.nr = {0}".format(el.nr))
-                                a_elmat = (a_diff.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
-                                
-                                # so far a_elmat contains only diffusion part 
-                                # we add the other part manually 
-                                f_elmat = (fee.CalcElementVector(el.GetFE(),el.GetTrafo())).NumPy()
+                                a_elmat = (a_diff.CalcElementMatrix(
+                                    el.GetFE(), el.GetTrafo())).NumPy()
+
+                                # so far a_elmat contains only diffusion part
+                                # we add the other part manually
+                                f_elmat = (fee.CalcElementVector(
+                                    el.GetFE(), el.GetTrafo())).NumPy()
                                 for i in range(len(f_elmat)):
                                     for j in range(len(f_elmat)):
                                         # print("adding  =", f_elmat[i]*f_elmat[j])
-                                        a_elmat[i,j] += f_elmat[i]*f_elmat[j]
-                                m_elmat = (m.CalcElementMatrix(el.GetFE(),el.GetTrafo())).NumPy()
-                                x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
+                                        a_elmat[i, j] += f_elmat[i]*f_elmat[j]
+                                m_elmat = (m.CalcElementMatrix(
+                                    el.GetFE(), el.GetTrafo())).NumPy()
+                                x = np.max(np.linalg.eig(
+                                    np.linalg.pinv(a_elmat)@m_elmat)[0])
                                 if isinstance(x, complex):
-                                    x =  x.real
+                                    x = x.real
                                 val = float("{:.2f}".format(x**2))
                                 constant.append(val)
                                 #input("Press key to proceed to next element")
@@ -265,12 +280,14 @@ class Convection_Diffusion():
                             alpha = np.max(constant)
                         else:
                             type = 'hdg'
-                        
+
                         jump_u = u-uhat()
                         jump_v = v-vhat()
 
                         # diffusion
-                        diffusion = grad(u) * grad(v) * dy + alpha * order ** 2/h * jump_u * jump_v * dS + (-grad(u) * n * jump_v - grad(v) * n * jump_u) * dS
+                        diffusion = grad(u) * grad(v) * dy + alpha * order ** 2/h * jump_u * \
+                            jump_v * dS + (-grad(u) * n * jump_v -
+                                           grad(v) * n * jump_u) * dS
 
                         # convection
                         b = CoefficientFunction(
@@ -299,11 +316,11 @@ class Convection_Diffusion():
                         gfu = gfu.components[0] + sum([gfu.components[2*i+2] * self.config['enrich_functions'][i]
                                                        for i in range(len(self.config['enrich_functions']))])
 
-                        #Draw(gfu.components[0],mesh,"u")
+                        # Draw(gfu.components[0],mesh,"u")
 
                         error = sqrt(Integrate(
                             (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order=30 + bonus_int))
-                        
+
                         self.results.loc[len(self.results)] = [
                             order, size, error, alpha, bonus_int, type]
 
