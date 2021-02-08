@@ -1,4 +1,4 @@
-#import netgen.gui
+import netgen.gui
 from netgen.geom2d import unit_square
 from ngsolve import *
 from ngsolve import grad as oldgrad

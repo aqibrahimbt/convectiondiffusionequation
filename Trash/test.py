@@ -4,6 +4,7 @@ from IPython.display import Image, display
 from functools import reduce
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 plt.style.use('seaborn-white')
 
 
@@ -32,8 +33,12 @@ def plot_comparison(table, alpha):
 
 
 
-results = pd.read_csv('hdg_symmetric_results.csv', header='infer', index_col=0)
-alphas = range(5, 105, 5)
-for value in alphas:
-    plot_comparison(results, value)
-    print('...............................')
+# results = pd.read_csv('hdg_symmetric_results.csv', header='infer', index_col=0)
+# alphas = range(5, 105, 5)
+# for value in alphas:
+#     plot_comparison(results, value)
+#     print('...............................')
+
+
+alphas = pd.read_csv('alphas.csv', header='infer', index_col=0)
+sns.displot(alphas, x="A", kind="kde")

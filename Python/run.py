@@ -15,7 +15,6 @@ import pandas as pd
 
 # modules
 from enrichment_proxy import *
-#from debug import *
 from convection_diffusion import *
 from utils import *
 
@@ -29,17 +28,19 @@ q = lambda y: y + (exp(beta[1]*(y-1)/eps)-exp(-beta[1]/eps))/(exp(-beta[1]/eps)-
 
 exact = p(x) * q(y)
 coeff =  beta[1] * p(x) +  beta[0] * q(y)
-#np.logspace(0,-1,num=30)
 
 config = {
     'order': [1, 2, 3, 4],
+    #'order': [1],
     'beta': (beta[0],beta[1]),
-    'mesh_size': np.logspace(0,-1,num=30),
+    'mesh_size': np.logspace(0,-1,num=20),
+    #'mesh_size': [0.125],
     'epsilon': 0.01,
     'exact': exact,
     'coeff': coeff,
-    'alpha': [10],
-    'bonus_int_order' : [5],
+    'alpha': [20],
+    'depend': 'no',
+    'bonus_int_order' : [20],
     'enrich_functions':[p(x), q(y)],
     'enrich_domain_ind':[lambda x,y,h: x > 1 - h, lambda x,y,h: y > 1 - h],
 }
@@ -47,25 +48,27 @@ config = {
 
 if __name__ == "__main__":
 
-    # with enrichment
+    ## with enrichment
     CT = Convection_Diffusion(config)
-    edg_table = CT._solveEDG()
-    #ehdg_table = CT._solveEHDG()
+    #edg_table, alphas = CT._solveEDG()
+    #print(edg_table.to_latex(index=False))  
+    ehdg_table = CT._solveEHDG()
     
     
-    # # without enrichment
-    dict = {'enrich_functions':[]}
+    # ## without enrichment
+    dict = {'enrich_functions': []}
     config.update(dict)
     CT = Convection_Diffusion(config)
-    dg_table = CT._solveEDG()
-    #hdg_table = CT._solveEHDG()
+    # # dg_table = CT._solveEDG()
+    hdg_table = CT._solveEHDG()
+    # #print(hdg_table.to_latex())
 
 
     # # # # visualizations
-    dg = pd.concat([dg_table, edg_table])
-    # dg.to_csv("symmetric_results_big.csv")
+    #dg = pd.concat([dg_table, edg_table])
+    #alphas.to_csv("alphas.csv")
     #dg.to_csv('dg.csv')
-    #hdg = pd.concat([hdg_table, ehdg_table])
+    hdg = pd.concat([hdg_table, ehdg_table])
     #hdg.to_csv("hdg_symmetric_results.csv")
-    plot_comparison(dg)
-    #plot_comparison(hdg)
+    plot_comparison(hdg)
+    #plot_comparison(hdg_table)
