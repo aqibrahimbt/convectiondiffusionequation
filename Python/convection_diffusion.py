@@ -22,17 +22,14 @@ class Convection_Diffusion():
 
     def __init__(self, new_config={}):
         self.config.update(new_config)
-        self.columns = ['Order', 'Mesh Size',
+        self.columns = ['Order', 'DOFs', 'Mesh Size',
                         'Error', 'Alpha', 'Bonus Int', 'Type']
         self.results = pd.DataFrame(columns=self.columns)
-        self.col = ['A']
-        self.alphas = pd.DataFrame(columns=self.col)
 
     '''Enriched Discontinuous Galerkin Methods'''
 
     def _solveEDG(self):
         self.results.iloc[0:0]
-        self.alphas.iloc[0:0]
         for order in self.config['order']:
             for size in self.config['mesh_size']:
                 for alpha in self.config['alpha']:
@@ -69,58 +66,47 @@ class Convection_Diffusion():
                         ba_active_dofs[:] = fes.FreeDofs()
 
                         if len(self.config['enrich_functions']) > 0:
-                            if self.config['depend'] == 'yes':
-                                type = str('edg-l')
+                            type = str('edg')
 
-                                #TODO: Refactor the linear dependence and inverse inequality computations
-                                #Checking linear dependence
-                                ipintegrator = SymbolicBFI(
-                                    u() * v(), bonus_intorder=bonus_int)
+                            ipintegrator = SymbolicBFI(
+                                u() * v(), bonus_intorder=bonus_int)
                                 
-                                ba_active_elements = BitArray(mesh.ne)
+                            ba_active_elements = BitArray(mesh.ne)
 
-                                for enr_indicator in self.config['enrich_domain_ind']:
-                                    ba_active_elements |= mark_elements(
-                                        mesh, enr_indicator, size)
+                            for enr_indicator in self.config['enrich_domain_ind']:
+                                ba_active_elements |= mark_elements(
+                                    mesh, enr_indicator, size)
 
-                                for el in fes.Elements():
-                                    if ba_active_elements[el.nr]:
-                                        i = ElementId(el)
-                                        N = len(el.dofs)
-                                        element = fes.GetFE(el)
-                                        elementstd = V.GetFE(i)
-                                        Nstd = elementstd.ndof
-                                        trafo = mesh.GetTrafo(i)
-                                        # Get element matrix
-                                        elmat = ipintegrator.CalcElementMatrix(element, trafo)
+                            for el in fes.Elements():
+                                if ba_active_elements[el.nr]:
+                                    i = ElementId(el)
+                                    N = len(el.dofs)
+                                    element = fes.GetFE(el)
+                                    elementstd = V.GetFE(i)
+                                    Nstd = elementstd.ndof
+                                    trafo = mesh.GetTrafo(i)
+                                    # Get element matrix
+                                    elmat = ipintegrator.CalcElementMatrix(element, trafo)
 
-                                        important = [True if el.dofs[i] >=
-                                                    0 else False for i in range(N)]
+                                    important = [True if el.dofs[i] >=0 else False for i in range(N)]
 
-                                        factors = []
-                                        for i in range(Nstd, N):
-                                            if important[i]:
-                                                active = [j for j in range(
-                                                    i) if important[j]]
-                                                factor = 1 - 2 * \
-                                                    sum([elmat[i, j]**2/elmat[i, i] /
-                                                        elmat[j, j] for j in active])
-                                                factor += sum([elmat[i, j]*elmat[i, k]*elmat[j, k]/elmat[i, i] /
-                                                            elmat[j, j]/elmat[k, k] for j in active for k in active])
-                                                factor = sqrt(abs(factor))
-                                                factors.append(factor)
-                                                if (factor <= 1e-3):
-                                                    #print('yes')
-                                                    important[i] = False
-                                                    if el.dofs[i] >= 0:
-                                                        ba_active_dofs[el.dofs[i]
-                                                                    ] = False
-                                # # stiffness
-                                #TODO:
-
-                            else:
-                                type = str('edg-s')
-                                print('standard-edg')
+                                    factors = []
+                                    for i in range(Nstd, N):
+                                        if important[i]:
+                                            active = [j for j in range(i) 
+                                            if important[j]]
+                                            factor = 1 - 2 * \
+                                                sum([elmat[i, j]**2/elmat[i, i] /
+                                                    elmat[j, j] for j in active])
+                                            factor += sum([elmat[i, j]*elmat[i, k]*elmat[j, k]/elmat[i, i] /
+                                                        elmat[j, j]/elmat[k, k] for j in active for k in active])
+                                            factor = sqrt(abs(factor))
+                                            factors.append(factor)
+                                            if (factor <= 1e-3):
+                                                important[i] = False
+                                                if el.dofs[i] >= 0:
+                                                    ba_active_dofs[el.dofs[i]] = False
+                            
                         else:
                             type = str('dg')
 
@@ -128,7 +114,7 @@ class Convection_Diffusion():
 
                         fee = SymbolicLFI(h**((-2-order)/2) * v, bonus_intorder=bonus_int)
 
-                            # mass
+                        # mass
                         m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True, bonus_intorder=bonus_int)
 
                         alpha_stab = GridFunction(L2(mesh))
@@ -147,9 +133,6 @@ class Convection_Diffusion():
                             x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
 
                             alpha_stab.vec[el.nr] += x.real
-                            self.alphas.loc[len(self.alphas)] = [x.real]
-
-
 
                         alpha = CoefficientFunction(alpha_stab)
 
@@ -191,26 +174,17 @@ class Convection_Diffusion():
                         gfu.vec.data = acd.mat.Inverse(
                             ba_active_dofs, inverse="pardiso") * f.vec
 
-                        # print(np.linalg.cond(acd.mat.Inverse(
-                        #     ba_active_dofs, inverse="pardiso") * f.vec))
-
                         gfu = gfu.components[0] + sum([gfu.components[i+1] * self.config['enrich_functions'][i]
                                                        for i in range(len(self.config['enrich_functions']))])
 
-                        #Draw(gfu, mesh,"u")
-                        #input('press next')
-                        #Draw(u2,mesh,"u",sd=5)
-                        #netgen.gui.Snapshot(w=800,h=500, filename="dg-h_"+str(size)+"-k_"+str(order)+".png")
                         # error
                         error = sqrt(Integrate(
                             (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order=bonus_int))
+                        
+                        self.results.loc[len(self.results)] = [order, fes.ndof, size, error, 10, bonus_int, type]
+                        print('order:', order, 'DOFs:', size, "err:", error, 'type:', type)
 
-                        self.results.loc[len(self.results)] = [
-                            order, size, error, 10, bonus_int, type]
-                        print('order:', order, 'bonus_int:',
-                              bonus_int, 'mesh_size:', size, "err:", error, 'type:', type)
-
-        return self.results, self.alphas
+        return self.results
 
     '''Enriched (Hybrid) Discontinuous Galerkin Methods'''
 
@@ -258,55 +232,49 @@ class Convection_Diffusion():
                         alpha_stab = GridFunction(L2(mesh))
 
                         # # Checking linear dependence
-                        #TODO: Checking linear dependence
                         if len(self.config['enrich_functions']) > 0:
                             type = 'ehdg'
-                            # ipintegrator = SymbolicBFI(
-                            #     u() * v(), bonus_intorder=bonus_int)
+                            ipintegrator = SymbolicBFI(
+                                u() * v() + uhat() * vhat(), bonus_intorder=bonus_int, element_boundary=True)
                                     
-                            # ba_active_elements = BitArray(mesh.ne)
+                            ba_active_elements = BitArray(mesh.ne)
 
-                            # for enr_indicator in self.config['enrich_domain_ind']:
-                            #     ba_active_elements |= mark_elements(
-                            #         mesh, enr_indicator, size)
+                            for enr_indicator in self.config['enrich_domain_ind']:
+                                ba_active_elements |= mark_elements(
+                                    mesh, enr_indicator, size)
 
-                            # for el in fes.Elements():
-                            #     if ba_active_elements[el.nr]:
-                            #         i = ElementId(el)
-                            #         N = len(el.dofs)
-                            #         element = fes.GetFE(el)
-                            #         elementstd = V.GetFE(i)
-                            #         Nstd = elementstd.ndof
-                            #         trafo = mesh.GetTrafo(i)
-                            #         # Get element matrix
-                            #         elmat = ipintegrator.CalcElementMatrix(element, trafo)
-                            #         #print(elmat)
-                            #         #input('')
-                            #         important = [True if el.dofs[i] >= 0 else False for i in range(N)]
-                            #         try:
-                            #             factors = []
-                            #             for i in range(Nstd, N):
-                            #                 if important[i]:
-                            #                     active = [j for j in range(i) if important[j]]
-                            #                     #print(elmat[i, i])
-                            #                     #input('test')
-                            #                     ## Division by zero
-                            #                     factor = 1 - 2 * \
-                            #                         sum([elmat[i, j]** 2/elmat[i, i] /
-                            #                             elmat[j, j] for j in active])
-                            #                     factor += sum([elmat[i, j]*elmat[i, k]*elmat[j, k]/elmat[i, i] /
-                            #                                 elmat[j, j]/elmat[k, k] for j in active for k in active])
-                            #                     factor = sqrt(abs(factor))
-
-                            #                     factors.append(factor)
-                            #                     if (factor <= 1e-3):
-                            #                         print('yes')
-                            #                         important[i] = False
-                            #                         if el.dofs[i] >= 0:
-                            #                             ba_active_dofs[el.dofs[i]
-                            #                                         ] = False
-                            #         except:
-                            #             print('do nothing')  
+                            for el in fes.Elements():
+                                if ba_active_elements[el.nr]:
+                                    i = ElementId(el)
+                                    N = len(el.dofs)
+                                    element = fes.GetFE(el)
+                                    elementstd = V.GetFE(i)
+                                    Nstd = elementstd.ndof
+                                    trafo = mesh.GetTrafo(i)
+                                    # Get element matrix
+                                    elmat = ipintegrator.CalcElementMatrix(element, trafo)
+                                    #print(elmat)
+                                    #input('')
+                                    important = [True if el.dofs[i] >= 0 else False for i in range(N)]
+                                    try:
+                                        factors = []
+                                        for i in range(Nstd, N):
+                                            if important[i]:
+                                                active = [j for j in range(i) if important[j]]
+                                                factor = 1 - 2 * \
+                                                    sum([elmat[i, j]** 2/elmat[i, i] /
+                                                        elmat[j, j] for j in active])
+                                                factor += sum([elmat[i, j]*elmat[i, k]*elmat[j, k]/elmat[i, i] /
+                                                            elmat[j, j]/elmat[k, k] for j in active for k in active])
+                                                factor = sqrt(abs(factor))
+                                                factors.append(factor)
+                                                if (factor <= 1e-3):
+                                                    important[i] = False
+                                                    if el.dofs[i] >= 0:
+                                                        ba_active_dofs[el.dofs[i]
+                                                                    ] = False
+                                    except Exception:
+                                        pass 
                         else:
                             type = 'hdg'
 
@@ -332,7 +300,8 @@ class Convection_Diffusion():
                             x = np.max(np.linalg.eig(
                                 np.linalg.pinv(a_elmat)@m_elmat)[0])
                                 
-                            alpha_stab.vec[el.nr] += 20 * x.real
+                            alpha_stab.vec[el.nr] += 2 * alpha + x.real
+                            #self.alphas.loc[len(self.alphas)] = [2 * alpha + x.real]
                         
                         alpha = CoefficientFunction(alpha_stab)
 
@@ -374,11 +343,10 @@ class Convection_Diffusion():
                         #Draw(gfu,mesh,"u")
 
                         error = sqrt(Integrate(
-                            (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order= bonus_int))
+                            (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order= 50 + bonus_int))
 
-                        self.results.loc[len(self.results)] = [
-                            order, size, error, 10, bonus_int, type]
+                        self.results.loc[len(self.results)] = [order, fes.ndof, size, error, 10, bonus_int, type]
 
                         print('order:', order, 'alpha:', 10, 'bonus_int:',
                               bonus_int, 'h:', size, "err:", error, 'type:', type)
-        return self.results
+        return self.results #, self.alphas
