@@ -28,7 +28,7 @@ plt.style.use('seaborn-white')
 #     plt.show()
 
 
-def plot_comparison(table):
+def plot_error_dof(table):
     order_1 = table[table.Order.eq(1.0)]
     order_2 = table[table.Order.eq(2.0)]
     order_3 = table[table.Order.eq(3.0)]
@@ -52,7 +52,7 @@ def plot_comparison(table):
     plt.show()
 
 
-def plot_error(table):
+def plot_error_mesh(table):
     order_1 = table[table.Order.eq(1.0)]
     order_2 = table[table.Order.eq(2.0)]
     order_3 = table[table.Order.eq(3.0)]

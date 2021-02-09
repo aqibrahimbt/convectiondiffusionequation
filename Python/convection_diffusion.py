@@ -1,9 +1,8 @@
 import numpy as np
 from numpy.linalg.linalg import norm
 import pandas as pd
-import scipy.linalg
 import scipy as sp
-#import netgen.gui
+
 
 from enrichment_proxy import *
 
@@ -23,7 +22,7 @@ class Convection_Diffusion():
     def __init__(self, new_config={}):
         self.config.update(new_config)
         self.columns = ['Order', 'DOFs', 'Mesh Size',
-                        'Error', 'Alpha', 'Bonus Int', 'Type']
+                        'Error', 'Bonus Int', 'Type']
         self.results = pd.DataFrame(columns=self.columns)
 
     '''Enriched Discontinuous Galerkin Methods'''
@@ -110,11 +109,12 @@ class Convection_Diffusion():
                         else:
                             type = str('dg')
 
+                        # stiffness matrix
                         a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=bonus_int)
 
                         fee = SymbolicLFI(h**((-2-order)/2) * v, bonus_intorder=bonus_int)
 
-                        # mass
+                        # mass matrix
                         m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True, bonus_intorder=bonus_int)
 
                         alpha_stab = GridFunction(L2(mesh))
@@ -181,8 +181,9 @@ class Convection_Diffusion():
                         error = sqrt(Integrate(
                             (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order=bonus_int))
                         
-                        self.results.loc[len(self.results)] = [order, fes.ndof, size, error, 10, bonus_int, type]
-                        print('order:', order, 'DOFs:', size, "err:", error, 'type:', type)
+                        self.results.loc[len(self.results)] = [order, fes.ndof, size, error, bonus_int, type]
+                        
+                        print('order:', order, 'DOFs:', fes.ndof, 'mesh:', size, "err:", error, 'type:', type)
 
         return self.results
 
@@ -253,8 +254,7 @@ class Convection_Diffusion():
                                     trafo = mesh.GetTrafo(i)
                                     # Get element matrix
                                     elmat = ipintegrator.CalcElementMatrix(element, trafo)
-                                    #print(elmat)
-                                    #input('')
+                                    
                                     important = [True if el.dofs[i] >= 0 else False for i in range(N)]
                                     try:
                                         factors = []
@@ -278,10 +278,11 @@ class Convection_Diffusion():
                         else:
                             type = 'hdg'
 
+                        # stiffness matrix
                         a_diff = SymbolicBFI(grad(u) * grad(v))
                         fee = SymbolicLFI(h**((-2-order)/2)*v)
 
-                        # mass
+                        # mass matrix
                         m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True)
 
                         for el in fes.Elements():
@@ -299,9 +300,10 @@ class Convection_Diffusion():
                                 
                             x = np.max(np.linalg.eig(
                                 np.linalg.pinv(a_elmat)@m_elmat)[0])
-                                
+
+                            alpha = 20   
                             alpha_stab.vec[el.nr] += 2 * alpha + x.real
-                            #self.alphas.loc[len(self.alphas)] = [2 * alpha + x.real]
+
                         
                         alpha = CoefficientFunction(alpha_stab)
 
@@ -340,13 +342,11 @@ class Convection_Diffusion():
                         gfu = gfu.components[0] + sum([gfu.components[2*i+2] * self.config['enrich_functions'][i]
                                                        for i in range(len(self.config['enrich_functions']))])
 
-                        #Draw(gfu,mesh,"u")
-
                         error = sqrt(Integrate(
                             (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order= 50 + bonus_int))
 
                         self.results.loc[len(self.results)] = [order, fes.ndof, size, error, 10, bonus_int, type]
 
-                        print('order:', order, 'alpha:', 10, 'bonus_int:',
-                              bonus_int, 'h:', size, "err:", error, 'type:', type)
-        return self.results #, self.alphas
+                        print('order:', order, 'DOFs:', fes.ndof, 'mesh:', size, "err:", error, 'type:', type)
+
+        return self.results

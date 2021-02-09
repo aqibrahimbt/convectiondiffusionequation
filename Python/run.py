@@ -1,5 +1,4 @@
 # netgen
-#from Python.utils import plot_comparison, plot_error
 from netgen.geom2d import unit_square
 from ngsolve import *
 from ngsolve import grad as ngsolvegrad
@@ -32,14 +31,13 @@ coeff =  beta[1] * p(x) +  beta[0] * q(y)
 
 config = {
     'order': [1, 2, 3, 4],
-    #'order': [1],
     'beta': (beta[0],beta[1]),
     'mesh_size': np.logspace(0,-1,num=20),
     #'mesh_size': [1.0, 0.5, 0.250, 0.125, 0.0625],
     'epsilon': 0.01,
     'exact': exact,
     'coeff': coeff,
-    'alpha': [30],
+    'alpha': [10],
     'bonus_int_order' : [10],
     'enrich_functions':[p(x), q(y)],
     'enrich_domain_ind':[lambda x,y,h: x > 1 - h, lambda x,y,h: y > 1 - h],
@@ -48,30 +46,22 @@ config = {
 
 if __name__ == "__main__":
 
-    ## with enrichment
+    # with enrichment
     CT = Convection_Diffusion(config)
     #edg_table = CT._solveEDG()
-    #print(edg_table.to_latex(index=False))  
     ehdg_table = CT._solveEHDG()
-    #print(ehdg_table.to_latex(index=False))
     
     
-    # ## without enrichment
+    # without enrichment
     dict = {'enrich_functions': []}
     config.update(dict)
     CT = Convection_Diffusion(config)
     #dg_table = CT._solveEDG()
     hdg_table = CT._solveEHDG()
-    # #print(hdg_table.to_latex())
 
 
-    # # # # visualizations
+    # visualizations
     #dg = pd.concat([dg_table, edg_table])
-    #alphas.to_csv("alphas_hdg.csv")
-    #dg.to_csv('dg.csv')
-    hdg = pd.concat([hdg_table, ehdg_table])
-    #hdg.to_csv("hdg_symmetric_results.csv")
-    #plot_comparison(ehdg_table)
-    #print(hdg.to_latex(index=False))
-    plot_error(hdg)
-    plot_comparison(hdg)
+    #hdg = pd.concat([hdg_table, ehdg_table])
+    #plot_error_mesh(hdg) ## Plots with the mesh_size
+    #plot_error_dof(hdg)
