@@ -2,6 +2,13 @@ import numpy as np
 from numpy.linalg.linalg import norm
 import pandas as pd
 import scipy as sp
+import netgen.gui
+from numpy import linalg as LA
+import matplotlib.pylab as plt
+import scipy.sparse as spe
+from ngsolve import ngsglobals
+ngsglobals.msg_level = 0
+
 
 
 from enrichment_proxy import *
@@ -23,12 +30,15 @@ class Convection_Diffusion():
         self.config.update(new_config)
         self.columns = ['Order', 'DOFs', 'Mesh Size',
                         'Error', 'Bonus Int', 'Type']
+        self.col = ['alpha', 'type', 'mesh_size', 'order']
         self.results = pd.DataFrame(columns=self.columns)
+        self.alphas = pd.DataFrame(columns=self.col)
 
     '''Enriched Discontinuous Galerkin Methods'''
 
     def _solveEDG(self):
         self.results.iloc[0:0]
+        self.alphas.iloc[0:0]
         for order in self.config['order']:
             for size in self.config['mesh_size']:
                 for alpha in self.config['alpha']:
@@ -48,6 +58,9 @@ class Convection_Diffusion():
                             fes.TrialFunction(), self.config['enrich_functions'])
                         v = EnrichmentProxy(
                             fes.TestFunction(), self.config['enrich_functions'])
+
+                        gf_indicator = GridFunction(Q)
+                        gf_indicator.vec[:] = 0.0
 
                         jump_u = u-u.Other()
                         jump_v = v-v.Other()
@@ -71,6 +84,7 @@ class Convection_Diffusion():
                                 u() * v(), bonus_intorder=bonus_int)
                                 
                             ba_active_elements = BitArray(mesh.ne)
+                            ba_active_elements[:] = False
 
                             for enr_indicator in self.config['enrich_domain_ind']:
                                 ba_active_elements |= mark_elements(
@@ -78,6 +92,7 @@ class Convection_Diffusion():
 
                             for el in fes.Elements():
                                 if ba_active_elements[el.nr]:
+                                    # gf_indicator.vec[el.nr] += 1
                                     i = ElementId(el)
                                     N = len(el.dofs)
                                     element = fes.GetFE(el)
@@ -105,24 +120,29 @@ class Convection_Diffusion():
                                                 important[i] = False
                                                 if el.dofs[i] >= 0:
                                                     ba_active_dofs[el.dofs[i]] = False
+                                                    gf_indicator.vec[el.nr] -= 1
+
                             
                         else:
                             type = str('dg')
 
-                        # stiffness matrix
-                        a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=bonus_int)
+                        # Draw(gf_indicator,mesh,"gf_ind")
+                        # input('')
 
-                        fee = SymbolicLFI(h**((-2-order)/2) * v, bonus_intorder=bonus_int)
+                        # stiffness matrix
+                        a_diff = SymbolicBFI(grad(u) * grad(v) , bonus_intorder=bonus_int)
+
+                        f = SymbolicLFI(h**((-2-order)/2) * v,bonus_intorder=bonus_int)
 
                         # mass matrix
-                        m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True, bonus_intorder=bonus_int)
+                        m = SymbolicBFI(h*(grad(u)*n)*(grad(v)*n),element_boundary=True, bonus_intorder=bonus_int)    
 
-                        alpha_stab = GridFunction(L2(mesh))
+                        alpha_stab = GridFunction(Q)
 
                         for el in fes.Elements():
                             a_elmat = (a_diff.CalcElementMatrix(el.GetFE(), el.GetTrafo())).NumPy()
 
-                            f_elmat = (fee.CalcElementVector(el.GetFE(), el.GetTrafo())).NumPy()
+                            f_elmat = (f.CalcElementVector(el.GetFE(), el.GetTrafo())).NumPy()
 
                             for i in range(len(f_elmat)):
                                 for j in range(len(f_elmat)):
@@ -132,7 +152,18 @@ class Convection_Diffusion():
 
                             x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
 
-                            alpha_stab.vec[el.nr] += x.real
+                            #x = np.max((sp.linalg.eig(m_elmat,b=a_elmat))[0])
+
+                            # print(x)
+
+                            # A = spe.csr_matrix(a_elmat)
+                            # print(np.linalg.cond(A.todense()))
+                            # if(x.real > 500):
+                            #     print(x.real)
+                            #     input('')
+
+                            alpha_stab.vec[el.nr] += 2 * x.real
+                            self.alphas.loc[len(self.alphas)] = [x.real, type, size, order]
 
                         alpha = CoefficientFunction(alpha_stab)
 
@@ -179,18 +210,23 @@ class Convection_Diffusion():
 
                         # error
                         error = sqrt(Integrate(
-                            (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order=bonus_int))
+                            (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order=20 + bonus_int))
+
+                        #Draw(gfu, mesh, 'test')
+                        #netgen.gui.Snapshot(w=1000,h=500, filename="myimage_"+str(order)+".png")
+                        #input('')
                         
                         self.results.loc[len(self.results)] = [order, fes.ndof, size, error, bonus_int, type]
                         
                         print('order:', order, 'DOFs:', fes.ndof, 'mesh:', size, "err:", error, 'type:', type)
 
-        return self.results
+        return self.results, self.alphas
 
     '''Enriched (Hybrid) Discontinuous Galerkin Methods'''
 
     def _solveEHDG(self):
         self.results.iloc[0:0]
+        self.alphas.iloc[0:0]
         for order in self.config['order']:
             for size in self.config['mesh_size']:
                 for alpha in self.config['alpha']:
@@ -303,50 +339,51 @@ class Convection_Diffusion():
 
                             alpha = 20   
                             alpha_stab.vec[el.nr] += 2 * alpha + x.real
+                            self.alphas.loc[len(self.alphas)] = [x.real, type, size, order]
 
                         
-                        alpha = CoefficientFunction(alpha_stab)
+                        # alpha = CoefficientFunction(alpha_stab)
 
-                        jump_u = u-uhat()
-                        jump_v = v-vhat()
+                        # jump_u = u-uhat()
+                        # jump_v = v-vhat()
 
-                        # diffusion
-                        diffusion = grad(u) * grad(v) * dy + alpha * order ** 2/h * jump_u * \
-                            jump_v * dS + (-grad(u) * n * jump_v -
-                                           grad(v) * n * jump_u) * dS
+                        # # diffusion
+                        # diffusion = grad(u) * grad(v) * dy + alpha * order ** 2/h * jump_u * \
+                        #     jump_v * dS + (-grad(u) * n * jump_v -
+                        #                    grad(v) * n * jump_u) * dS
 
-                        # convection
-                        b = CoefficientFunction(
-                            (self.config['beta'][0], self.config['beta'][1]))
-                        uup = IfPos(b * n, u(), uhat())
-                        convection = -b * u * \
-                            grad(v) * dy + b * n * uup * jump_v * dS + \
-                            IfPos(b * n, (uhat()-u)*vhat(), 0) * dS
+                        # # convection
+                        # b = CoefficientFunction(
+                        #     (self.config['beta'][0], self.config['beta'][1]))
+                        # uup = IfPos(b * n, u(), uhat())
+                        # convection = -b * u * \
+                        #     grad(v) * dy + b * n * uup * jump_v * dS + \
+                        #     IfPos(b * n, (uhat()-u)*vhat(), 0) * dS
 
-                        # lhs
-                        acd = BilinearForm(fes, symmetric=False)
-                        acd += self.config['epsilon'] * diffusion + convection
-                        with TaskManager():
-                            acd.Assemble()
+                        # # lhs
+                        # acd = BilinearForm(fes, symmetric=False)
+                        # acd += self.config['epsilon'] * diffusion + convection
+                        # with TaskManager():
+                        #     acd.Assemble()
 
-                        # rhs
-                        f = LinearForm(fes)
-                        f += self.config['coeff'] * v * dy
-                        with TaskManager():
-                            f.Assemble()
+                        # # rhs
+                        # f = LinearForm(fes)
+                        # f += self.config['coeff'] * v * dy
+                        # with TaskManager():
+                        #     f.Assemble()
 
-                        gfu = GridFunction(fes)
-                        gfu.vec.data = acd.mat.Inverse(
-                            ba_active_dofs, inverse="pardiso") * f.vec
+                        # gfu = GridFunction(fes)
+                        # gfu.vec.data = acd.mat.Inverse(
+                        #     ba_active_dofs, inverse="pardiso") * f.vec
 
-                        gfu = gfu.components[0] + sum([gfu.components[2*i+2] * self.config['enrich_functions'][i]
-                                                       for i in range(len(self.config['enrich_functions']))])
+                        # gfu = gfu.components[0] + sum([gfu.components[2*i+2] * self.config['enrich_functions'][i]
+                        #                                for i in range(len(self.config['enrich_functions']))])
 
-                        error = sqrt(Integrate(
-                            (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order= 50 + bonus_int))
+                        # error = sqrt(Integrate(
+                        #     (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order= 50 + bonus_int))
 
-                        self.results.loc[len(self.results)] = [order, fes.ndof, size, error, 10, bonus_int, type]
+                        # self.results.loc[len(self.results)] = [order, fes.ndof, size, error, 10, bonus_int, type]
 
-                        print('order:', order, 'DOFs:', fes.ndof, 'mesh:', size, "err:", error, 'type:', type)
+                        # print('order:', order, 'DOFs:', fes.ndof, 'mesh:', size, "err:", error, 'type:', type)
 
-        return self.results
+        return self.results, self.alphas

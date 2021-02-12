@@ -6,7 +6,7 @@ from ngsolve.comp import ProxyFunction
 from ngsolve import ngsglobals
 ngsglobals.msg_level = 0
 #from ngsolve.webgui import Draw as WebGuiDraw
-#import netgen.gui
+import netgen.gui
 
 # packages
 import numpy as np
@@ -29,11 +29,12 @@ q = lambda y: y + (exp(beta[1]*(y-1)/eps)-exp(-beta[1]/eps))/(exp(-beta[1]/eps)-
 exact = p(x) * q(y)
 coeff =  beta[1] * p(x) +  beta[0] * q(y)
 
+#[lambda x,y,h: x > 1 - h, lambda x,y,h: y > 1 - h]
 config = {
     'order': [1, 2, 3, 4],
     'beta': (beta[0],beta[1]),
-    'mesh_size': np.logspace(0,-1,num=20),
-    #'mesh_size': [1.0, 0.5, 0.250, 0.125, 0.0625],
+    #'mesh_size': np.logspace(0,-1,num=20),
+    'mesh_size': [1.0, 0.5, 0.25, 0.1250, 0.0625],
     'epsilon': 0.01,
     'exact': exact,
     'coeff': coeff,
@@ -48,20 +49,23 @@ if __name__ == "__main__":
 
     # with enrichment
     CT = Convection_Diffusion(config)
-    #edg_table = CT._solveEDG()
-    ehdg_table = CT._solveEHDG()
+    edg_table, alpha_edg  = CT._solveEDG()
+    # ehdg_table, alpha_ehdg = CT._solveEHDG()
     
     
     # without enrichment
-    dict = {'enrich_functions': []}
+    dict = {'enrich_functions': [], 'enrich_domain_ind': []}
     config.update(dict)
     CT = Convection_Diffusion(config)
-    #dg_table = CT._solveEDG()
-    hdg_table = CT._solveEHDG()
+    dg_table, alpha_dg = CT._solveEDG()
+    #hdg_table, alpha_hdg = CT._solveEHDG()
 
+    # write to files
+    alphas = pd.concat([alpha_edg, alpha_dg])
+    alphas.to_csv('alphas_dg.csv')
 
     # visualizations
-    #dg = pd.concat([dg_table, edg_table])
+    # dg = pd.concat([dg_table, edg_table])
     #hdg = pd.concat([hdg_table, ehdg_table])
-    #plot_error_mesh(hdg) ## Plots with the mesh_size
-    #plot_error_dof(hdg)
+    # plot_error_mesh(dg) ## Plots with the mesh_size
+    # plot_error_dof(dg)
