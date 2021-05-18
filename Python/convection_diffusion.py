@@ -9,6 +9,7 @@ import matplotlib.pylab as plt
 import scipy.sparse as spe
 import math
 from ngsolve import ngsglobals
+import numpy as np
 ngsglobals.msg_level = 0
 
 
@@ -77,7 +78,7 @@ class Convection_Diffusion():
                 ba_active_dofs = BitArray(fes.FreeDofs())
                 ba_active_dofs[:] = fes.FreeDofs()
 
-                alpha_stab = GridFunction(L2(mesh))
+                # alpha_stab = GridFunction(L2(mesh))
 
                 if len(self.config['enrich_functions']) > 0:
                     type = str('edg')
@@ -95,8 +96,9 @@ class Convection_Diffusion():
                     for el in fes.Elements():
                         if ba_active_elements[el.nr]:
                             gf_indicator.vec[el.nr] += 1
-                            #Draw(gf_indicator, mesh, 'enriched')
+                            # Draw(gf_indicator, mesh, 'enriched')
                             N = len(el.dofs)
+
                             Nstd = V.GetFE(ElementId(el)).ndof
                             elmat = ipintegrator.CalcElementMatrix(el.GetFE(), el.GetTrafo())
                             
@@ -114,58 +116,62 @@ class Convection_Diffusion():
                                                 elmat[j, j]/elmat[k, k] for j in active for k in active])
                                     factor = sqrt(abs(factor))
                                     factors.append(factor)
-
                                     if (factor <= self.config['theta']):
+                                        print('yes')
                                         important[i] = False
                                         if el.dofs[i] >= 0:
                                             ba_active_dofs[el.dofs[i]] = False
-                                            gf_indicator.vec[el.nr] -= 1
                 else:
                     type = str('dg')   
 
-                # stiffness matrix        
-                a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=self.config['bonus_int'])
+                # Draw(gf_indicator, mesh, 'enriched')
+                # input('')
+                # # stiffness matrix        
+                # a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=self.config['bonus_int'])
+                # f = SymbolicLFI(h**((-2-mesh.dim)/2) * v, bonus_intorder=self.config['bonus_int'])
 
-                f = SymbolicLFI(h**((-2-mesh.dim)/2) * v, bonus_intorder=self.config['bonus_int'])
+                # # mass matrix
+                # m = SymbolicBFI(h*(grad(u)*n)*(grad(v)*n),
+                #                 element_boundary=True, bonus_intorder=self.config['bonus_int'])
 
-                # mass matrix
-                m = SymbolicBFI(h*(grad(u)*n)*(grad(v)*n),
-                                element_boundary=True, bonus_intorder=self.config['bonus_int'])
+                # for el in fes.Elements():
+                #     a_elmat = (a_diff.CalcElementMatrix(el.GetFE(), el.GetTrafo())).NumPy()
 
-                for el in fes.Elements():
-                    a_elmat = (a_diff.CalcElementMatrix(
-                        el.GetFE(), el.GetTrafo())).NumPy()
+                #     f_elmat = (f.CalcElementVector(
+                #         el.GetFE(), el.GetTrafo())).NumPy()
 
-                    f_elmat = (f.CalcElementVector(
-                        el.GetFE(), el.GetTrafo())).NumPy()
+                #     for i in range(len(f_elmat)):
+                #         for j in range(len(f_elmat)):
+                #             a_elmat[i, j] += f_elmat[i]*f_elmat[j]
 
-                    for i in range(len(f_elmat)):
-                        for j in range(len(f_elmat)):
-                            a_elmat[i, j] += f_elmat[i]*f_elmat[j]
-
-                    m_elmat = (m.CalcElementMatrix(
-                        el.GetFE(), el.GetTrafo())).NumPy()
+                #     m_elmat = (m.CalcElementMatrix(
+                #         el.GetFE(), el.GetTrafo())).NumPy()
                     
-                    important = []
-                    for i, dof in enumerate(el.dofs):
-                        if dof > 0 and ba_active_dofs[dof]:
-                            important.append(i)
+                #     important = []
+                #     for i, dof in enumerate(el.dofs):
+                #         if dof > 0 and ba_active_dofs[dof]:
+                #             important.append(i)
                     
-                    m_elmat = m_elmat[np.ix_(important,important)]
-                    a_elmat = a_elmat[np.ix_(important,important)]
-                        
-                    #eigs = np.sort(sp.linalg.eigvals(m_elmat, b=a_elmat).real)
+                #     m_elmat = m_elmat[np.ix_(important,important)]
+                #     a_elmat = a_elmat[np.ix_(important,important)]
 
-                    x = np.max(sp.linalg.eig(m_elmat,b=a_elmat)[0])
-                    
-                    alpha_stab.vec[el.nr] += x.real
-                    alp = 2 * mesh.dim ** 2 * x.real
+                #     # eigs = np.sort(sp.linalg.eigvals(m_elmat, b=a_elmat).real)
+                #     # lmax = eigs[1]
+                #     # lmin = eigs[-1]
+                #     # print(lmax)
+                #     # print(lmin)
+                #     x = np.max(sp.linalg.eig(m_elmat,b=a_elmat)[0])
+                #     print(x)
+                #     if x.real:
+                #         csr = x.real
 
-                    self.alphas.loc[len(self.alphas)] = [alp, type, size, order]
+                #     alpha_stab.vec[el.nr] += csr
 
-                alpha = 2 * mesh.dim ** 2 * CoefficientFunction(alpha_stab)
+                #     self.alphas.loc[len(self.alphas)] = [csr, type, size, order]
                 
-                #ges = Compress(fes, active_dofs=ba_active_dofs)
+                # alpha =  4 * CoefficientFunction(alpha_stab) / h
+                alpha = 100
+
                 # # non-symmetric diffusion equation
                 # diffusion = grad(u) * grad(v) * dy \
                 #     + alpha * order ** 2 / h * jump_u * jump_v * dX \
@@ -188,7 +194,7 @@ class Convection_Diffusion():
                     grad(v) * dy + b * n * uup * jump_v * dX
 
                 # lhs
-                acd = BilinearForm(fes, symmetric=True)
+                acd = BilinearForm(fes, symmetric=False)
                 acd += self.config['epsilon'] * diffusion + convection
                 with TaskManager():
                     acd.Assemble()
@@ -237,7 +243,7 @@ class Convection_Diffusion():
                 Vlist = [V]
                 Vlist.append(F)
 
-                gf_indicator = GridFunction(Q)
+                gf_indicator = GridFunction(L2(mesh))
                 gf_indicator.vec[:] = 0.0
 
                 for enr_indicator in self.config['enrich_domain_ind'] or []:
@@ -268,7 +274,7 @@ class Convection_Diffusion():
 
                 alpha_stab = GridFunction(L2(mesh))
 
-                print(fes.ndof)
+                #print(fes.ndof)
 
                 # # Checking linear dependence
                 if len(self.config['enrich_functions']) > 0:
@@ -282,10 +288,12 @@ class Convection_Diffusion():
                         ba_active_elements |= mark_elements(
                             mesh, enr_indicator, size)
 
+                    test = 0
                     for el in fes.Elements():
                         if ba_active_elements[el.nr]:
                             gf_indicator.vec[el.nr] += 1
                             N = len(el.dofs)
+                            test += N
                             Nstd = V.GetFE(ElementId(el)).ndof
                             elmat = ipintegrator.CalcElementMatrix(el.GetFE(), el.GetTrafo())
                             
@@ -307,88 +315,93 @@ class Convection_Diffusion():
                                             if el.dofs[i] >= 0:
                                                 ba_active_dofs[el.dofs[i]] = False
                                                 gf_indicator.vec[el.nr] -= 1
+                                                test -= 1
                             except Exception:
                                 pass
                 else:
                     type = 'hdg'
 
-                #Draw(gf_indicator,mesh,"gf_ind")
-                #input('')                        
+                # print(test)
+                # Draw(gf_indicator,mesh,"gf_ind")
+                # input('')                        
                 # # stiffness matrix
-                a_diff = SymbolicBFI(grad(u) * grad(v))
+                # a_diff = SymbolicBFI(grad(u) * grad(v))
 
-                f = SymbolicLFI(h**((-2-mesh.dim)/2) * v)
+                # f = SymbolicLFI(h**((-2-mesh.dim)/2) * v)
 
-                # mass matrix
-                m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True)
+                # # mass matrix
+                # m = SymbolicBFI(h * (grad(u) * n)*(grad(v) * n), element_boundary=True)
 
-                for el in fes.Elements():
-                    a_elmat = (a_diff.CalcElementMatrix(
-                        el.GetFE(), el.GetTrafo())).NumPy()
+                # for el in fes.Elements():
+                #     a_elmat = (a_diff.CalcElementMatrix(
+                #         el.GetFE(), el.GetTrafo())).NumPy()
 
-                    f_elmat = (f.CalcElementVector(
-                        el.GetFE(), el.GetTrafo())).NumPy()
+                #     f_elmat = (f.CalcElementVector(
+                #         el.GetFE(), el.GetTrafo())).NumPy()
 
-                    for i in range(len(f_elmat)):
-                        for j in range(len(f_elmat)):
-                            a_elmat[i, j] += f_elmat[i]*f_elmat[j]
+                #     for i in range(len(f_elmat)):
+                #         for j in range(len(f_elmat)):
+                #             a_elmat[i, j] += f_elmat[i]*f_elmat[j]
                         
-                    m_elmat = (m.CalcElementMatrix(
-                        el.GetFE(), el.GetTrafo())).NumPy()
+                #     m_elmat = (m.CalcElementMatrix(
+                #         el.GetFE(), el.GetTrafo())).NumPy()
 
-                    important = []
-                    for i, dof in enumerate(el.dofs):
-                        if dof > 0 and ba_active_dofs[dof]:
-                            important.append(i)
+                #     important = []
+                #     for i, dof in enumerate(el.dofs):
+                #         if dof > 0 and ba_active_dofs[dof]:
+                #             important.append(i)
                     
-                    m_elmat = m_elmat[np.ix_(important,important)]
-                    a_elmat = a_elmat[np.ix_(important,important)] 
+                #     m_elmat = m_elmat[np.ix_(important,important)]
+                #     a_elmat = a_elmat[np.ix_(important,important)] 
 
-                    # print(a_elmat)  
-                    # input('')
+                #     # print(a_elmat)  
+                #     # input('')
                         
-                    # x = np.max(sp.linalg.eig(m_elmat,b=a_elmat)[0])
-                    x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
-                    # print(x)
+                #     # x = np.max(sp.linalg.eig(m_elmat,b=a_elmat)[0])
+                #     x = np.max(np.linalg.eig(np.linalg.pinv(a_elmat)@m_elmat)[0])
+                #     # print(x)
 
 
-                    alpha_stab.vec[el.nr] += 20 * x.real
-                    alp = 1 / 2 * np.sqrt(1 + x.real)
-                    self.alphas.loc[len(self.alphas)] = [alp, type, size, order]
-             
-                alpha = CoefficientFunction(alpha_stab)
+                #     alpha_stab.vec[el.nr] += 20 * x.real
+                #     alp = 1 / 2 * np.sqrt(1 + x.real)
+                #     self.alphas.loc[len(self.alphas)] = [alp, type, size, order]
+                alpha = 10
+                # alpha = CoefficientFunction(alpha_stab)
 
                 
-                ges = Compress(fes, ba_active_dofs)
-                print(ges.ndof)
-                input('')
-                # jump_u = u-uhat()
-                # jump_v = v-vhat()
+                #ges = Compress(fes, ba_active_dofs)
 
-                # # diffusion
-                # diffusion = grad(u) * grad(v) * dy + alpha * order ** 2/h * jump_u * \
-                #     jump_v * dS + (-grad(u) * n * jump_v -
-                #                     grad(v) * n * jump_u) * dS
+                jump_u = u-uhat()
+                jump_v = v-vhat()
 
-                # # convection
-                # b = CoefficientFunction(
-                #     (self.config['beta'][0], self.config['beta'][1]))
-                # uup = IfPos(b * n, u(), uhat())
-                # convection = -b * u * \
-                #     grad(v) * dy + b * n * uup * jump_v * dS + \
-                #     IfPos(b * n, (uhat()-u)*vhat(), 0) * dS
+                # diffusion
+                diffusion = grad(u) * grad(v) * dy + alpha * order ** 2/h * jump_u * \
+                    jump_v * dS + (-grad(u) * n * jump_v -
+                                    grad(v) * n * jump_u) * dS
 
-                # # lhs
-                # acd = BilinearForm(fes, symmetric=False)
-                # acd += self.config['epsilon'] * diffusion + convection
-                # with TaskManager():
-                #     acd.Assemble()
+                # convection
+                b = CoefficientFunction(
+                    (self.config['beta'][0], self.config['beta'][1]))
+                uup = IfPos(b * n, u(), uhat())
+                convection = -b * u * \
+                    grad(v) * dy + b * n * uup * jump_v * dS + \
+                    IfPos(b * n, (uhat()-u)*vhat(), 0) * dS
+
+                # lhs
+                acd = BilinearForm(fes, symmetric=False)
+                acd += self.config['epsilon'] * diffusion + convection
+                with TaskManager():
+                    acd.Assemble()
 
                 # # rhs
                 # f = LinearForm(fes)
                 # f += self.config['coeff'] * v * dy
                 # with TaskManager():
                 #     f.Assemble()
+
+                rows,cols,vals = acd.mat.COO()
+                A = spe.csr_matrix((vals,(rows,cols)))
+                print('third: ', np.linalg.cond(A.todense()))
 
                 # gfu = GridFunction(fes)
                 # gfu.vec.data = acd.mat.Inverse(
