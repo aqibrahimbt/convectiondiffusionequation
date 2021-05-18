@@ -202,9 +202,12 @@ class Convection_Diffusion():
                 # rhs
                 f = LinearForm(fes)
                 f += self.config['coeff'] * v * dy
+                f += self.config['exact'] * (alpha * order ** 2/h * v * dS - n * grad(v) ) * dS
+                f += self.config['exact'] * (alpha * order ** 2/h * v * dS - n * grad(v) ) * dS
+                f += b * n * IfPos(b*n,0,-self.config['exact']) * v * dS
                 with TaskManager():
                     f.Assemble()
-
+                print("--------------")
                 # solve the system
                 gfu = GridFunction(fes, name="uDG")
                 gfu.vec.data = acd.mat.Inverse(

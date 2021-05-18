@@ -6,6 +6,10 @@ from ngsolve import grad as ngsolvegrad
 from ngsolve.comp import ProxyFunction
 from ngsolve import ngsglobals
 ngsglobals.msg_level = 0
+import sys
+#sys.path.append('../goengs')
+sys.path.append('./')
+import enrichment_proxy
 #from ngsolve.webgui import Draw as WebGuiDraw
 #import netgen.gui
 
@@ -28,23 +32,29 @@ ce = sqrt(5*eps)
 p =  lambda x: (1-(exp(2*(x-0.5)/ce) - 1 ) / (exp(2*(x-0.5)/ce) + 1 ))
 q =  lambda y: (1-(exp(2*(y-0.5)/ce) - 1 ) / (exp(2*(y-0.5)/ce) + 1 )) 
 
+
+
 exact = p(x) * q(y)
 
-coeff =  beta[1] * p(x) +  beta[0] * q(y)
+coeff = -eps*exact.Diff(x).Diff(x)-eps*exact.Diff(y).Diff(y)+beta[0]*exact.Diff(x)+beta[1]*exact.Diff(y)
+#coeff =  beta[1] * p(x) +  beta[0] * q(y)
 
 
 config = {
-    'order': [1],
+    'order': [4],
     'beta': (beta[0],beta[1]),
     'mesh_size': np.logspace(0,-1,num=20),
-    'mesh_size' :[0.0625],
+    #'mesh_size' :[0.0625],
     'epsilon': eps,
     'exact': exact,
     'coeff': coeff,
     'bonus_int' : 10,
     'theta': 1e-3,
-    'enrich_functions':[p(x), q(y)],
-    'enrich_domain_ind':[lambda x,y,h: x > 1 - h, lambda x,y,h: y > - 1 - h],
+    'enrich_functions':[],
+    'enrich_domain_ind':[],
+    # 'enrich_functions':[p(x), q(y)],
+    # 'enrich_domain_ind':[lambda x,y,h: x > 0.5 - h and x < 0.5 + h and y < 0.5 + h, 
+    #                      lambda x,y,h: y > 0.5 - h and y < 0.5 + h and x < 0.5 + h],
 }
 
 

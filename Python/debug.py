@@ -151,6 +151,10 @@ class Convection_Diffusion():
                 # rhs
                 f = LinearForm(fes)
                 f += self.config['coeff'] * v * dy
+                f += self.config['exact'] * self.config['epsilon'] * (alpha * order ** 2/h * v - n * grad(v) ) * dS
+                f += b * n * IfPos(b*n,0,-self.config['exact']) * v * dS
+                with TaskManager():
+                    f.Assemble()
                 with TaskManager():
                     f.Assemble()
 
