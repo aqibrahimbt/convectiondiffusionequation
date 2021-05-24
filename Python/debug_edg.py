@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.linalg.linalg import norm
 import pandas as pd
+import scipy.sparse as spe
 import scipy as sp
 import netgen.gui
 from numpy.linalg import pinv
@@ -73,10 +74,10 @@ class Convection_Diffusion():
 
                 ba_active_dofs = BitArray(fes.FreeDofs())
                 ba_active_dofs[:] = fes.FreeDofs()
+                alpha_stab = GridFunction(L2(mesh))
 
                 if len(self.config['enrich_functions']) > 0:
                     type = str('edg')
-                    print('hello world')
                     ipintegrator = SymbolicBFI(
                         u() * v(), bonus_intorder=self.config['bonus_int'])
                         
@@ -87,48 +88,82 @@ class Convection_Diffusion():
                         ba_active_elements |= mark_elements(
                             mesh, enr_indicator, size)
 
-                    # for el in fes.Elements():
-                    #     if ba_active_elements[el.nr]:
-                    #         gf_indicator.vec[el.nr] += 1
-                    # #         N = len(el.dofs)
+                    for el in fes.Elements():
+                        if ba_active_elements[el.nr]:
+                            gf_indicator.vec[el.nr] += 1
+                            N = len(el.dofs)
 
-                    # #         Nstd = V.GetFE(ElementId(el)).ndof
-                    # #         elmat = ipintegrator.CalcElementMatrix(el.GetFE(), el.GetTrafo())
+                            Nstd = V.GetFE(ElementId(el)).ndof
+                            elmat = ipintegrator.CalcElementMatrix(el.GetFE(), el.GetTrafo())
                             
-                    # #         important = [True if el.dofs[i] >=
-                    # #                     0 else False for i in range(N)]
-                    # #         factors = []
-                    # #         for i in range(Nstd, N):
-                    # #             if important[i]:
-                    # #                 active = [j for j in range(i)
-                    # #                         if important[j]]
-                    # #                 factor = 1 - 2 * \
-                    # #                     sum([elmat[i, j]**2/elmat[i, i] /
-                    # #                         elmat[j, j] for j in active])
-                    # #                 factor += sum([elmat[i, j]*elmat[i, k]*elmat[j, k]/elmat[i, i] /
-                    # #                             elmat[j, j]/elmat[k, k] for j in active for k in active])
-                    # #                 factor = sqrt(abs(factor))
-                    # #                 factors.append(factor)
-                    # #                 if (factor <= self.config['theta']):
-                    # #                     important[i] = False
-                    # #                     if el.dofs[i] >= 0:
-                    # #                         ba_active_dofs[el.dofs[i]] = False
+                            important = [True if el.dofs[i] >=
+                                        0 else False for i in range(N)]
+                            factors = []
+                            for i in range(Nstd, N):
+                                if important[i]:
+                                    active = [j for j in range(i)
+                                            if important[j]]
+                                    factor = 1 - 2 * \
+                                        sum([elmat[i, j]**2/elmat[i, i] /
+                                            elmat[j, j] for j in active])
+                                    factor += sum([elmat[i, j]*elmat[i, k]*elmat[j, k]/elmat[i, i] /
+                                                elmat[j, j]/elmat[k, k] for j in active for k in active])
+                                    factor = sqrt(abs(factor))
+                                    factors.append(factor)
+                                    if (factor <= self.config['theta']):
+                                        important[i] = False
+                                        if el.dofs[i] >= 0:
+                                            ba_active_dofs[el.dofs[i]] = False
+                                            gf_indicator.vec[el.nr] = 0
                 else:
                     type = str('dg')   
 
                 #Draw(gf_indicator, mesh, 'enriched')
-                #input('')
+                # input('')
+                # # stiffness matrix        
+                a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=self.config['bonus_int'])
+                f = SymbolicLFI(h**((-2-mesh.dim)/2) * v, bonus_intorder=self.config['bonus_int'])
 
-                alpha = 10
+                # mass matrix
+                m = SymbolicBFI(h*(grad(u)*n)*(grad(v)*n),
+                                element_boundary=True, bonus_intorder=self.config['bonus_int'])
 
-                # # non-symmetric diffusion equation
-                # diffusion = grad(u) * grad(v) * dy \
-                #     + alpha * order ** 2 / h * jump_u * jump_v * dX \
-                #     + (-mean_dudn * jump_v + mean_dvdn * jump_u) * dX \
-                #     + (alpha * order ** 2/h * u * v * dS) \
-                #     + (-n * grad(u) * v + n * grad(v) * u) * dS
+                for el in fes.Elements():
+                    a_elmat = (a_diff.CalcElementMatrix(el.GetFE(), el.GetTrafo())).NumPy()
 
-                # symmetric diffusion equation
+                    f_elmat = (f.CalcElementVector(
+                        el.GetFE(), el.GetTrafo())).NumPy()
+
+                    for i in range(len(f_elmat)):
+                        for j in range(len(f_elmat)):
+                            a_elmat[i, j] += f_elmat[i]*f_elmat[j]
+
+                    m_elmat = (m.CalcElementMatrix(
+                        el.GetFE(), el.GetTrafo())).NumPy()
+                    
+                    important = []
+                    for i, dof in enumerate(el.dofs):
+                        if dof > 0 and ba_active_dofs[dof]:
+                            important.append(i)
+                    
+                    m_elmat = m_elmat[np.ix_(important,important)]
+                    a_elmat = a_elmat[np.ix_(important,important)]
+
+                    # eigs = np.sort(sp.linalg.eigvals(m_elmat, b=a_elmat).real)
+                    # lmax = eigs[1]
+                    # lmin = eigs[-1]
+                    # print(lmax)
+                    # print(lmin)
+                    x = np.max(sp.linalg.eig(m_elmat,b=a_elmat)[0])
+                    if x.real:
+                        csr = x.real
+
+                    alpha_stab.vec[el.nr] += csr
+
+                    self.alphas.loc[len(self.alphas)] = [csr, type, size, order]
+                
+                alpha =  4 * CoefficientFunction(alpha_stab) / h
+
                 diffusion = grad(u) * grad(v) * dy \
                     + alpha * order ** 2 / h * jump_u * jump_v * dX \
                     + (-mean_dudn * jump_v - mean_dvdn * jump_u) * dX \
@@ -153,11 +188,13 @@ class Convection_Diffusion():
                 f += self.config['coeff'] * v * dy
                 f += self.config['exact'] * self.config['epsilon'] * (alpha * order ** 2/h * v - n * grad(v) ) * dS
                 f += b * n * IfPos(b*n,0,-self.config['exact']) * v * dS
-                with TaskManager():
-                    f.Assemble()
+                
                 with TaskManager():
                     f.Assemble()
 
+                # rows,cols,vals = acd.mat.COO()
+                # A = spe.csr_matrix((vals,(rows,cols)))
+                # print('third: ', np.linalg.cond(A.todense()))
                 # solve the system
                 gfu = GridFunction(fes, name="uDG")
                 gfu.vec.data = acd.mat.Inverse(
@@ -170,8 +207,8 @@ class Convection_Diffusion():
                 error = sqrt(Integrate(
                     (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order= 20 + self.config['bonus_int']))
 
-                Draw(gfu, mesh, 'test')
-                input('')
+                # Draw(gfu, mesh, 'test')
+                # input('')
                 #netgen.gui.Snapshot(w=1000,h=500, filename="myimage_"+str(order)+".png")
                 #input('')
                 

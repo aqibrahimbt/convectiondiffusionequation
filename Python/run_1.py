@@ -8,8 +8,8 @@ from ngsolve import ngsglobals
 ngsglobals.msg_level = 0
 import sys
 #sys.path.append('../goengs')
-sys.path.append('./')
-import enrichment_proxy
+#sys.path.append('./')
+#import enrichment_proxy
 #from ngsolve.webgui import Draw as WebGuiDraw
 #import netgen.gui
 
@@ -20,7 +20,7 @@ import pandas as pd
 
 # modules
 from enrichment_proxy import *
-from debug import *
+from debug_ehdg import *
 from utils import *
 
 
@@ -32,19 +32,16 @@ ce = sqrt(5*eps)
 p =  lambda x: (1-(exp(2*(x-0.5)/ce) - 1 ) / (exp(2*(x-0.5)/ce) + 1 ))
 q =  lambda y: (1-(exp(2*(y-0.5)/ce) - 1 ) / (exp(2*(y-0.5)/ce) + 1 )) 
 
-
-
 exact = p(x) * q(y)
 
 coeff = -eps*exact.Diff(x).Diff(x)-eps*exact.Diff(y).Diff(y)+beta[0]*exact.Diff(x)+beta[1]*exact.Diff(y)
-#coeff =  beta[1] * p(x) +  beta[0] * q(y)
-
 
 config = {
-    'order': [4],
+    'order': [1,2, 3, 4],
     'beta': (beta[0],beta[1]),
     'mesh_size': np.logspace(0,-1,num=20),
-    #'mesh_size' :[0.0625],
+    #'mesh_size': [0.0625],
+    #'mesh_size': [0.0625],
     'epsilon': eps,
     'exact': exact,
     'coeff': coeff,
@@ -52,9 +49,8 @@ config = {
     'theta': 1e-3,
     'enrich_functions':[],
     'enrich_domain_ind':[],
-    # 'enrich_functions':[p(x), q(y)],
-    # 'enrich_domain_ind':[lambda x,y,h: x > 0.5 - h and x < 0.5 + h and y < 0.5 + h, 
-    #                      lambda x,y,h: y > 0.5 - h and y < 0.5 + h and x < 0.5 + h],
+    #'enrich_functions':[p(x), q(y)],
+    #'enrich_domain_ind':[lambda x,y,h: x > 0.5 - h and x < 0.5 + h and y < 0.5 + h, lambda x,y,h: y > 0.5 - h and y < 0.5 + h and x < 0.5 + h],
 }
 
 
@@ -62,23 +58,24 @@ if __name__ == "__main__":
 
     # with enrichment
     CT = Convection_Diffusion(config)
-    edg_table, alpha_edg  = CT._solveEDG()
-    # ehdg_table, alpha_ehdg = CT._solveEHDG()
-    
-    # # # without enrichment
+    # edg_table, alpha_edg  = CT._solveEDG()
+    ehdg_table, alpha_ehdg = CT._solveEHDG()
+    # #print(edg_table)
+    # # # # # without enrichment
     # dict = {'enrich_functions': [], 'enrich_domain_ind': []}
     # config.update(dict)
     # CT = Convection_Diffusion(config)
-    # # #dg_table, alpha_dg = CT._solveEDG()
-    # hdg_table, alpha_hdg = CT._solveEHDG()
+    # dg_table, alpha_dg = CT._solveEDG()
+    # # # hdg_table, alpha_hdg = CT._solveEHDG()
 
-    # # # # # write to files
-    # alphas = pd.concat([alpha_edg, alpha_dg])
-    # alphas.to_csv('alphas_dg.csv')
+    # # # # # # # write to files
+    # # alphas = pd.concat([alpha_edg, alpha_dg])
+    # # alphas.to_csv('alphas_dg.csv')
 
-    # # # # visualizations
-    # #dg = pd.concat([hdg_table, ehdg_table])
+    # # # # # visualizations
+    # dg = pd.concat([dg_table, edg_table])
+    # dg.to_csv('dg.csv')
     # # # #print(dg.to_latex(index=False)) 
     # hdg = pd.concat([hdg_table, ehdg_table])
-    plot_error_mesh(edg_table) ## Plots with the mesh_size
-    # plot_error_dof(hdg_table)
+    plot_error_mesh(ehdg_table) ## Plots with the mesh_size
+    #plot_error_dof(dg)
