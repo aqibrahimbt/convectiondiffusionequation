@@ -27,7 +27,7 @@ from utils import *
 
 ### Problem configuration
 beta = (1, 2)
-eps = 1e-4
+eps = 1e-1
 ce = sqrt(5*eps)
 p =  lambda x: (1-(exp(2*(x-0.5)/ce) - 1 ) / (exp(2*(x-0.5)/ce) + 1 ))
 q =  lambda y: (1-(exp(2*(y-0.5)/ce) - 1 ) / (exp(2*(y-0.5)/ce) + 1 )) 

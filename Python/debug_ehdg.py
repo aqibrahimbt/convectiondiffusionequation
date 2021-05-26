@@ -34,7 +34,7 @@ class Convection_Diffusion():
         self.results = pd.DataFrame(columns=self.columns)
         self.alphas = pd.DataFrame(columns=self.col)
 
-    '''Enriched Discontinuous Galerkin Methods'''
+    '''Enriched Hybrid Discontinuous Galerkin Methods'''
 
     def _solveEHDG(self):
         self.results.iloc[0:0]
@@ -192,9 +192,10 @@ class Convection_Diffusion():
 
                 # # rhs
                 f = LinearForm(fes)
+                #f += SymbolicLFI(1*v)
                 f += self.config['coeff'] * v * dy
-                f += self.config['exact'] * self.config['epsilon'] * (alpha * order ** 2/h * v - n * grad(v) ) * dS
-                f += b * n * IfPos(b*n,0,-self.config['exact']) * v * dS
+                #f += self.config['exact'] * self.config['epsilon'] * (alpha * order ** 2/h * v - n * grad(v) ) * dS
+                #f += b * n * IfPos(b*n,0,-self.config['exact']) * v * dS
                 
                 with TaskManager():
                     f.Assemble()
@@ -210,9 +211,8 @@ class Convection_Diffusion():
                 gfu = gfu.components[0] + sum([gfu.components[2*i+2] * self.config['enrich_functions'][i]
                                                 for i in range(len(self.config['enrich_functions']))])
 
-
                 error = sqrt(Integrate(
-                    (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order= 50 + self.config['bonus_int']))
+                    (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order= 20 + self.config['bonus_int']))
 
                 self.results.loc[len(self.results)] = [order, fes.ndof, size, error, self.config['bonus_int'], type]
 

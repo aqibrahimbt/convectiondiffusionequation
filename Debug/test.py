@@ -29,12 +29,12 @@ beta = (2, 0.001)
 
 # q = lambda y: exp((beta[1] * y / 2 * eps) * C * exp(np.sqrt(beta[1]**2 + 4 * k) * y/2* eps) + D * exp(- np.sqrt(beta[1]**2 + 4 * k)  * y / 2* eps))
 
-mesh = Mesh(unit_square.GenerateMesh(maxh=0.05))
+mesh = Mesh(unit_square.GenerateMesh(maxh=0.0625))
 eps = 1e-4
 ce = sqrt(5*eps)
 p =  lambda x: (1-    (  exp(2*(x-0.5)/ce) - 1 ) / (exp(2*(x-0.5)/ce) + 1 ) )
 q =  lambda y: (1-    (  exp(2*(y-0.5)/ce) - 1 ) / (exp(2*(y-0.5)/ce) + 1 ) ) 
-sol = p(x) * q(y)
+sol = 1
 Draw(sol,mesh,"prod")
 input('')
 
