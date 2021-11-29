@@ -1,7 +1,0 @@
-/Users/tunde/Documents/netgen/mastersthesis/mylittlengsolve/1_Basic/build/CMakeFiles/install/strip.dir
-/Users/tunde/Documents/netgen/mastersthesis/mylittlengsolve/1_Basic/build/CMakeFiles/install.dir
-/Users/tunde/Documents/netgen/mastersthesis/mylittlengsolve/1_Basic/build/CMakeFiles/list_install_components.dir
-/Users/tunde/Documents/netgen/mastersthesis/mylittlengsolve/1_Basic/build/CMakeFiles/rebuild_cache.dir
-/Users/tunde/Documents/netgen/mastersthesis/mylittlengsolve/1_Basic/build/CMakeFiles/edit_cache.dir
-/Users/tunde/Documents/netgen/mastersthesis/mylittlengsolve/1_Basic/build/CMakeFiles/install/local.dir
-/Users/tunde/Documents/netgen/mastersthesis/mylittlengsolve/1_Basic/build/CMakeFiles/myngspy.dir

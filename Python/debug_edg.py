@@ -90,7 +90,7 @@ class Convection_Diffusion():
 
                     for el in fes.Elements():
                         if ba_active_elements[el.nr]:
-                            gf_indicator.vec[el.nr] += 1
+                            #gf_indicator.vec[el.nr] += 1
                             N = len(el.dofs)
 
                             Nstd = V.GetFE(ElementId(el)).ndof
@@ -113,14 +113,16 @@ class Convection_Diffusion():
                                     if (factor <= self.config['theta']):
                                         important[i] = False
                                         if el.dofs[i] >= 0:
-                                            ba_active_dofs[el.dofs[i]] = False
-                                            gf_indicator.vec[el.nr] = 0
+                                            ba_active_dofs[el.dofs[i]] = False                        
+                                    else:
+                                        gf_indicator.vec[el.nr] += 1
+
                 else:
                     type = str('dg')   
 
-                #Draw(gf_indicator, mesh, 'enriched')
+                # Draw(gf_indicator, mesh, 'enriched')
                 # input('')
-                # # stiffness matrix        
+                # # # stiffness matrix        
                 a_diff = SymbolicBFI(grad(u) * grad(v), bonus_intorder=self.config['bonus_int'])
                 f = SymbolicLFI(h**((-2-mesh.dim)/2) * v, bonus_intorder=self.config['bonus_int'])
 
@@ -207,8 +209,8 @@ class Convection_Diffusion():
                 error = sqrt(Integrate(
                     (gfu-self.config['exact'])*(gfu-self.config['exact']), mesh, order= 20 + self.config['bonus_int']))
 
-                # Draw(gfu, mesh, 'test')
-                # input('')
+                Draw(gfu, mesh, 'test')
+                input('')
                 #netgen.gui.Snapshot(w=1000,h=500, filename="myimage_"+str(order)+".png")
                 #input('')
                 
